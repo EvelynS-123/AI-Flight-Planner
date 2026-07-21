@@ -134,6 +134,7 @@ button:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid
 .score-block, .price-block { display: grid; gap: 4px; text-align: right; }
 .score-block span, .price-block span { color: var(--muted); font-size: 11px; }
 .score-block strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+.score-number { display: inline-block; min-width: 2ch; line-height: 0.9; --number-flow-mask-height: 0.2em; }
 .price-block { min-width: 108px; }
 .price-block strong { font-size: 23px; letter-spacing: -0.035em; }
 .disclosure { color: #8d9096; font-size: 20px; transform: rotate(0); transition: transform 420ms var(--spring); }

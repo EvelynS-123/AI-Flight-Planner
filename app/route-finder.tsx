@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import NumberFlow, { continuous } from "@number-flow/react";
 import { AIRPORTS, DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
+
+const SCORE_NUMBER_PLUGINS = [continuous];
 
 function OriginalArtDefs() {
   return (
@@ -345,7 +348,17 @@ export default function RouteFinder() {
                       </div>
                       <div className="score-block">
                         <span>实时得分</span>
-                        <strong>{Math.round(route.scores.total)}</strong>
+                        <strong>
+                          <NumberFlow
+                            className="score-number"
+                            value={Math.round(route.scores.total)}
+                            plugins={SCORE_NUMBER_PLUGINS}
+                            transformTiming={{ duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+                            spinTiming={{ duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+                            opacityTiming={{ duration: 160, easing: "ease-out" }}
+                            willChange
+                          />
+                        </strong>
                       </div>
                       <div className="price-block">
                         <span>样本合计</span>
