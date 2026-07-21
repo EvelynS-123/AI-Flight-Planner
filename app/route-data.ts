@@ -58,6 +58,9 @@ export const AIRPORTS: Record<string, { city: string; country: string }> = {
   YVR: { city: "温哥华", country: "加拿大" },
 };
 
+export const DEMO_ORIGINS: AirportCode[] = ["PVG", "HKG", "TPE", "NRT"];
+export const DEMO_DESTINATIONS: AirportCode[] = ["LAX", "SFO", "SEA", "YVR"];
+
 const SOURCES = {
   pvgNrt: { price: 106, date: "2026-09-18", airline: "Trip.com fare", source: "Trip.com", url: "https://www.trip.com/flights/airport-pvg-nrt/", stops: 0 },
   pvgIcn: { price: 114, date: "2026-09-04", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/pvg/icn/shanghai-to-seoul", stops: 0 },
@@ -72,6 +75,9 @@ const SOURCES = {
   tpeHnl: { price: 371, date: "2026-08-31", airline: "Alaska Airlines", source: "Trip.com", url: "https://www.trip.com/flights/city-tpe-airport-hnl/", stops: 1 },
   icnHnl: { price: 284, date: "2026-08-26", airline: "Air Premia", source: "Trip.com", url: "https://www.trip.com/flights/airport-icn-hnl/", stops: 0 },
   kixHnl: { price: 248, date: "2026-08-26", airline: "Route fare", source: "Momondo", url: "https://www.momondo.com/flights/kansai-intl-airport-kix/honolulu", stops: 0 },
+  nrtHnl: { price: 211, date: "2026-09-29", airline: "ZIPAIR", source: "Trip.com", url: "https://www.trip.com/flights/airport-nrt-city-hnl/", stops: 0 },
+  nrtIcn: { price: 115, date: "2026-09-30", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/nrt/icn/tokyo-to-seoul?flightType=ONE_WAY", stops: 0 },
+  nrtTpe: { price: 115, date: "2026-09-10", airline: "Jetstar Japan", source: "Trip.com", url: "https://www.trip.com/flights/airport-nrt-city-tpe/", stops: 0 },
   nrtLax: { price: 265, date: "2026-09-12", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/nrt/lax/tokyo-to-los-angeles", stops: 0 },
   nrtSfo: { price: 389, date: "2026-09 snapshot", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/nrt/sfo/tokyo-to-san-francisco", stops: 0 },
   nrtYvr: { price: 303, date: "2026-09-10", airline: "ZIPAIR", source: "Trip.com", url: "https://www.trip.com/flights/airport-nrt-yvr/", stops: 0 },
@@ -82,6 +88,7 @@ const SOURCES = {
   tpeLax: { price: 512, date: "2026-09-06", airline: "STARLUX", source: "Trip.com", url: "https://www.trip.com/flights/airport-tpe-lax/", stops: 0 },
   tpeSfo: { price: 444, date: "2026-08/09 snapshot", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/tpe/sfo/taipei-to-san-francisco", stops: 0 },
   tpeSea: { price: 406, date: "2026-09-11", airline: "Delta", source: "Trip.com", url: "https://www.trip.com/flights/airport-tpe-sea/", stops: 0 },
+  icnSea: { price: 491, date: "2026-09-30", airline: "Philippine Airlines · 1 stop", source: "Google Flights", url: "https://www.google.com/travel/flights/flights-from-seoul-to-seattle.html?gl=US&hl=en-US", stops: 1 },
   hnlLax: { price: 149, date: "2026-09-09", airline: "United", source: "Google Flights", url: "https://www.google.com/travel/flights/flights-from-honolulu-to-los-angeles.html", stops: 0 },
   hnlSfo: { price: 174, date: "2026-09-09", airline: "United", source: "Google Flights", url: "https://www.google.com/travel/flights/flights-from-honolulu-to-san-francisco.html", stops: 0 },
   hnlYvr: { price: 189, date: "2026-09-21", airline: "Route fare", source: "KAYAK", url: "https://www.kayak.com/flight-routes/Honolulu-HNL/Vancouver-Intl-YVR", stops: 0 },
@@ -143,6 +150,9 @@ const SEED_ROUTES: RouteOption[] = [
   option("kix-hnl-sfo", "KIX", "HNL", "SFO", "kixHnl", "hnlSfo"),
   option("kix-hnl-yvr", "KIX", "HNL", "YVR", "kixHnl", "hnlYvr"),
   option("kix-hnl-sea", "KIX", "HNL", "SEA", "kixHnl", "hnlSea"),
+  option("nrt-hnl-sea", "NRT", "HNL", "SEA", "nrtHnl", "hnlSea"),
+  option("nrt-icn-sea", "NRT", "ICN", "SEA", "nrtIcn", "icnSea"),
+  option("nrt-tpe-sea", "NRT", "TPE", "SEA", "nrtTpe", "tpeSea"),
 ];
 
 const DIRECT_SEGMENTS: Segment[] = [
@@ -197,6 +207,7 @@ const CONNECTION_ROUTES: RouteOption[] = [
   itinerary("tpe-yvr-connection-lion", "TPE", "YVR", 406, "2026-08-26", "Thai Lion Air", "Trip.com", "https://www.trip.com/flights/airport-tpe-city-yvr/"),
   itinerary("kix-lax-connection-peach", "KIX", "LAX", 442, "2026-08-08", "Peach Aviation", "Trip.com", "https://www.trip.com/flights/airport-kix-lax/"),
   itinerary("hkg-sea-connection", "HKG", "SEA", 570, "2026-08-31", "1-stop itinerary", "HolidayPrice", "https://holidayprice.com/flights/hongkong-hkg/seattle-sea/"),
+  itinerary("nrt-sea-connection-pal", "NRT", "SEA", 681, "2026-09-23", "Philippine Airlines · 1 stop", "Google Flights", "https://www.google.com/travel/flights/flights-from-tokyo-to-seattle.html?gl=US&hl=en-US"),
 ];
 
 const uniqueSegments = new Map<string, Segment>();
@@ -209,8 +220,8 @@ for (const segment of [...SEED_ROUTES.flatMap((route) => route.segments), ...DIR
 export const SEGMENTS = [...uniqueSegments.values()];
 
 function buildRoutes() {
-  const origins: AirportCode[] = ["PVG", "PEK", "HKG", "TPE", "ICN", "KIX", "NRT"];
-  const destinations: AirportCode[] = ["LAX", "SFO", "SEA", "YVR"];
+  const origins = DEMO_ORIGINS;
+  const destinations = DEMO_DESTINATIONS;
   const routes: RouteOption[] = [];
 
   function walk(origin: AirportCode, destination: AirportCode, airport: string, path: Segment[], visited: Set<string>) {
