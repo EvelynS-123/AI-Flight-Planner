@@ -1,0 +1,141 @@
+/*
+ * ╔══════════════════════════════════════════════════════════╗
+ * ║   AI Flight Transfer Planner — Design Tokens v2         ║
+ * ║   插画蜡笔风格系统                                        ║
+ * ╚══════════════════════════════════════════════════════════╝
+ */
+
+:root {
+  /* ── 色板：低饱和天蓝 + 山峦蓝灰 ──────────────────────── */
+  --c-sky-50:  #F4F9FD;
+  --c-sky-100: #E8F3FA;
+  --c-sky-200: #D0E8F5;
+  --c-sky-300: #AECFE6;
+  --c-sky-400: #82B4D6;
+  --c-sky-500: #5A9CC0;
+  --c-sky-600: #3A7EA8;
+  --c-sky-700: #245F88;
+
+  /* 山峦蓝灰 */
+  --c-mtn-light: #C8DAE8;
+  --c-mtn-mid:   #A8C0D6;
+  --c-mtn-dark:  #8AAEC4;
+
+  /* 暖色点缀（小面积使用）*/
+  --c-warm-300: #F4E4CC;
+  --c-warm-500: #E8A86C;
+
+  /* 文字 */
+  --c-text-heading: #1E3D5A;
+  --c-text-body:    #3A5872;
+  --c-text-muted:   #7A9BB8;
+  --c-text-white:   #FFFFFF;
+
+  /* 表面 */
+  --c-surface:      rgba(255, 255, 255, 0.78);
+  --c-surface-soft: rgba(240, 248, 255, 0.65);
+
+  /* ── 字体 ─────────────────────────────────────────────── */
+  --f-sketch:  "Caveat", cursive;          /* 手写大标题 */
+  --f-body:    "Lora", "Georgia", serif;   /* 正文衬线 */
+  --f-ui:      "Inter", sans-serif;        /* UI 小文字 */
+
+  /* ── 间距 ─────────────────────────────────────────────── */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  --sp-12: 48px; --sp-16: 64px; --sp-20: 80px;
+
+  /* ── 圆角 ─────────────────────────────────────────────── */
+  --r-sm: 8px; --r-md: 14px; --r-lg: 20px;
+  --r-xl: 28px; --r-pill: 9999px;
+
+  /* ── 投影（更柔和，蜡笔风格少用硬阴影） ───────────────── */
+  --shadow-soft: 0 2px 12px rgba(58, 126, 168, 0.10);
+  --shadow-card: 0 4px 24px rgba(58, 126, 168, 0.13);
+  --shadow-lift: 0 8px 36px rgba(58, 126, 168, 0.16);
+
+  /* ── 过渡 ─────────────────────────────────────────────── */
+  --t-fast: 140ms ease;
+  --t-mid:  260ms ease;
+  --t-slow: 400ms ease;
+
+  /* ── 布局 ─────────────────────────────────────────────── */
+  --max-w: 1160px;
+}
+
+/* ── Reset ────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--f-ui);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--c-text-body);
+  background: linear-gradient(160deg, #C4DDEF 0%, #DFF0FA 40%, #F0F8FF 100%);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── 核心工具类：sketch-card ─────────────────────────────────
+ * 手绘风格卡片——白色半透明底，柔和投影，略微不规则圆角
+ * （用 border-radius 的不对称值模拟手绘感）
+ */
+.sketch-card {
+  background: var(--c-surface);
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-radius: 18px 20px 16px 22px; /* 不对称，手绘感 */
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── 按钮：sketch 风格 ──────────────────────────────────────── */
+.btn-sketch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-3) var(--sp-6);
+  font-family: var(--f-sketch);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: white;
+  background: linear-gradient(135deg, var(--c-sky-500), var(--c-sky-600));
+  border: none;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+  box-shadow: 0 3px 14px rgba(58, 126, 168, 0.32);
+  transition: transform var(--t-fast), box-shadow var(--t-mid);
+}
+.btn-sketch:hover  { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(58,126,168,0.4); }
+.btn-sketch:active { transform: translateY(0); }
+
+.btn-sketch--large {
+  font-size: 1.3rem;
+  padding: var(--sp-4) var(--sp-10);
+}
+
+.btn-sketch--ghost {
+  background: transparent;
+  color: var(--c-sky-600);
+  border: 1.5px solid var(--c-sky-400);
+  box-shadow: none;
+}
+.btn-sketch--ghost:hover {
+  background: rgba(176, 212, 240, 0.2);
+  box-shadow: none;
+}
+
+/* ── 进度条 ─────────────────────────────────────────────────── */
+.progress-bar {
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--c-sky-200);
+  overflow: hidden;
+}
+.progress-bar__fill {
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--c-sky-400), var(--c-sky-600));
+  transition: width 0.9s cubic-bezier(0.34,1.56,0.64,1);
+}
