@@ -29,15 +29,18 @@ export type RouteWeights = {
   directness: number;
 };
 
-export function rebalanceWeights(current: RouteWeights, key: keyof RouteWeights, value: number): RouteWeights {
+export function moveWeightBoundary(
+  current: RouteWeights,
+  boundary: "price-interest" | "interest-directness",
+  value: number,
+): RouteWeights {
   const nextValue = Math.max(0, Math.min(100, Math.round(value)));
-  const otherKeys = (Object.keys(current) as Array<keyof RouteWeights>).filter((item) => item !== key);
-  const remaining = 100 - nextValue;
-  const currentOtherTotal = current[otherKeys[0]] + current[otherKeys[1]];
-  const first = currentOtherTotal === 0
-    ? Math.round(remaining / 2)
-    : Math.round(remaining * current[otherKeys[0]] / currentOtherTotal);
-  return { ...current, [key]: nextValue, [otherKeys[0]]: first, [otherKeys[1]]: remaining - first };
+  if (boundary === "price-interest") {
+    const price = Math.min(nextValue, 100 - current.directness);
+    return { price, interest: 100 - price - current.directness, directness: current.directness };
+  }
+  const interestEnd = Math.max(current.price, nextValue);
+  return { price: current.price, interest: interestEnd - current.price, directness: 100 - interestEnd };
 }
 
 export const AIRPORTS: Record<string, { city: string; country: string }> = {

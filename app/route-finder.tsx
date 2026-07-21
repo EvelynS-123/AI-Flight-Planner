@@ -1,7 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { AIRPORTS, ROUTES, rebalanceWeights, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { AIRPORTS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
 
 const ORIGINS: AirportCode[] = ["PVG", "PEK", "HKG", "TPE", "ICN", "KIX", "NRT"];
 const DESTINATIONS: AirportCode[] = ["LAX", "SFO", "SEA", "YVR"];
@@ -91,7 +91,10 @@ export default function RouteFinder() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [searched, setSearched] = useState(true);
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
-  const previousPositions = useRef(new Map<string, DOMRect>());
+  const previousPositions = useRef(new Map<string, number>());
+  const reorderAnimations = useRef(new Map<string, Animation>());
+  const allocationBarRef = useRef<HTMLDivElement>(null);
+  const activeBoundary = useRef<"price-interest" | "interest-directness" | null>(null);
 
   const results = useMemo(() => {
     const matched = ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
@@ -105,26 +108,90 @@ export default function RouteFinder() {
   }, [results]);
 
   useLayoutEffect(() => {
-    const nextPositions = new Map<string, DOMRect>();
+    const nextPositions = new Map<string, number>();
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
     for (const [id, element] of cardRefs.current) {
-      const next = element.getBoundingClientRect();
-      nextPositions.set(id, next);
+      const transform = getComputedStyle(element).transform;
+      const currentY = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42;
+      const nextTop = element.getBoundingClientRect().top - currentY;
+      nextPositions.set(id, nextTop);
+
       const previous = previousPositions.current.get(id);
-      if (!previous) continue;
-      const delta = previous.top - next.top;
+      if (previous === undefined) continue;
+      const delta = previous - nextTop;
       if (Math.abs(delta) < 1) continue;
-      element.style.transition = "none";
-      element.style.transform = `translate3d(0, ${delta}px, 0)`;
-      requestAnimationFrame(() => {
-        element.style.transition = "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)";
-        element.style.transform = "translate3d(0, 0, 0)";
-      });
+
+      reorderAnimations.current.get(id)?.cancel();
+      if (reduceMotion) continue;
+
+      // Keep the card at its current presentation position, even if the user
+      // changes the slider again before the previous reorder has settled.
+      const animation = element.animate(
+        [
+          { transform: `translate3d(0, ${delta + currentY}px, 0)` },
+          { transform: "translate3d(0, 0, 0)" },
+        ],
+        { duration: 380, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      );
+      reorderAnimations.current.set(id, animation);
+      animation.onfinish = () => {
+        if (reorderAnimations.current.get(id) === animation) reorderAnimations.current.delete(id);
+      };
     }
     previousPositions.current = nextPositions;
   }, [results]);
 
-  function updateWeight(key: keyof RouteWeights, value: number) {
-    setWeights((current) => rebalanceWeights(current, key, value));
+  useEffect(() => () => {
+    for (const animation of reorderAnimations.current.values()) animation.cancel();
+    reorderAnimations.current.clear();
+  }, []);
+
+  useEffect(() => {
+    const continueDrag = (event: globalThis.PointerEvent) => {
+      if (activeBoundary.current) moveBoundaryFromClientX(activeBoundary.current, event.clientX);
+    };
+    const endDrag = () => { activeBoundary.current = null; };
+    window.addEventListener("pointermove", continueDrag);
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+    return () => {
+      window.removeEventListener("pointermove", continueDrag);
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", endDrag);
+    };
+  }, []);
+
+  function updateBoundary(boundary: "price-interest" | "interest-directness", value: number) {
+    setWeights((current) => moveWeightBoundary(current, boundary, value));
+  }
+
+  function moveBoundaryFromClientX(boundary: "price-interest" | "interest-directness", clientX: number) {
+    const bar = allocationBarRef.current;
+    if (!bar) return;
+    const rect = bar.getBoundingClientRect();
+    const value = ((clientX - rect.left) / rect.width) * 100;
+    updateBoundary(boundary, value);
+  }
+
+  function startBoundaryDrag(boundary: "price-interest" | "interest-directness", event: PointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    activeBoundary.current = boundary;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    moveBoundaryFromClientX(boundary, event.clientX);
+  }
+
+  function moveBoundaryFromKeyboard(boundary: "price-interest" | "interest-directness", event: KeyboardEvent<HTMLButtonElement>) {
+    const current = boundary === "price-interest" ? weights.price : weights.price + weights.interest;
+    const step = event.shiftKey ? 5 : 1;
+    let next = current;
+    if (event.key === "ArrowLeft" || event.key === "ArrowDown") next -= step;
+    else if (event.key === "ArrowRight" || event.key === "ArrowUp") next += step;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = 100;
+    else return;
+    event.preventDefault();
+    updateBoundary(boundary, next);
   }
 
   function search() {
@@ -208,26 +275,46 @@ export default function RouteFinder() {
             <div className="weight-panel" aria-label="路线排序权重">
               <div className="weight-intro">
                 <div><span>你的排序权重</span><strong>100%</strong></div>
-                <p>拖动任一项，路线分数与名次会实时变化。</p>
+                <p>拖动两个分界点，在同一条 bar 上分配三项权重。</p>
               </div>
-              {([
-                ["price", "最便宜", "¥"],
-                ["interest", "最有趣", "✦"],
-                ["directness", "最直接", "→"],
-              ] as const).map(([key, label, icon]) => (
-                <label className={`weight-control weight-${key}`} key={key}>
-                  <span className="weight-label"><i>{icon}</i>{label}<strong>{weights[key]}%</strong></span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={weights[key]}
-                    onChange={(event) => updateWeight(key, Number(event.target.value))}
-                    style={{ "--weight": `${weights[key]}%` } as React.CSSProperties}
+              <div className="allocation-control">
+                <div className="allocation-stage">
+                  <div className="allocation-bar" ref={allocationBarRef} aria-hidden="true">
+                    <span className="allocation-price" style={{ width: `${weights.price}%` }} />
+                    <span className="allocation-interest" style={{ width: `${weights.interest}%` }} />
+                    <span className="allocation-directness" style={{ width: `${weights.directness}%` }} />
+                  </div>
+                  <button
+                    className="allocation-handle price-interest-handle"
+                    type="button"
+                    role="slider"
+                    aria-label="最便宜与最有趣的分界"
+                    aria-valuemin={0}
+                    aria-valuemax={100 - weights.directness}
+                    aria-valuenow={weights.price}
+                    style={{ left: `${weights.price}%` }}
+                    onPointerDown={(event) => startBoundaryDrag("price-interest", event)}
+                    onKeyDown={(event) => moveBoundaryFromKeyboard("price-interest", event)}
                   />
-                </label>
-              ))}
+                  <button
+                    className="allocation-handle interest-directness-handle"
+                    type="button"
+                    role="slider"
+                    aria-label="最有趣与最直接的分界"
+                    aria-valuemin={weights.price}
+                    aria-valuemax={100}
+                    aria-valuenow={weights.price + weights.interest}
+                    style={{ left: `${weights.price + weights.interest}%` }}
+                    onPointerDown={(event) => startBoundaryDrag("interest-directness", event)}
+                    onKeyDown={(event) => moveBoundaryFromKeyboard("interest-directness", event)}
+                  />
+                </div>
+                <div className="allocation-legend">
+                  <span className="price"><i>¥</i>最便宜<strong>{weights.price}%</strong></span>
+                  <span className="interest"><i>✦</i>最有趣<strong>{weights.interest}%</strong></span>
+                  <span className="directness"><i>→</i>最直接<strong>{weights.directness}%</strong></span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -261,7 +348,7 @@ export default function RouteFinder() {
                       </div>
                       <div className="score-block">
                         <span>实时得分</span>
-                        <strong key={Math.round(route.scores.total)}>{Math.round(route.scores.total)}</strong>
+                        <strong>{Math.round(route.scores.total)}</strong>
                       </div>
                       <div className="price-block">
                         <span>样本合计</span>
