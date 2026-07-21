@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { AIRPORTS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
-
-const ORIGINS: AirportCode[] = ["PVG", "PEK", "HKG", "TPE", "ICN", "KIX", "NRT"];
-const DESTINATIONS: AirportCode[] = ["LAX", "SFO", "SEA", "YVR"];
+import { AIRPORTS, DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
 
 function OriginalArtDefs() {
   return (
@@ -322,7 +319,7 @@ export default function RouteFinder() {
             <div className="empty-state">
               <span aria-hidden="true">⌁</span>
               <h3>换一个出发地或目的地试试</h3>
-              <p>本 demo 目前收录东亚 6 个出发机场和北美西海岸 4 个到达机场。</p>
+              <p>本 demo 聚焦 4 个数据较完整的东亚出发机场和 4 个北美西海岸到达机场。</p>
             </div>
           ) : (
             <div className="route-list">

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ROUTES, moveWeightBoundary, scoreRoutes } from "../app/route-data.ts";
+import { DEMO_DESTINATIONS, DEMO_ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes } from "../app/route-data.ts";
 
 test("demo includes a broad set of all three ticket types", () => {
   assert.ok(ROUTES.length >= 90);
@@ -12,6 +12,21 @@ test("demo includes a broad set of all three ticket types", () => {
 test("default September search shows direct, connection, and multi-city choices", () => {
   const routes = ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX" && route.months.includes("Sep"));
   assert.deepEqual(new Set(routes.map((route) => route.ticketType)), new Set(["direct", "connection", "multi-city"]));
+});
+
+test("every visible airport pair has enough September choices to compare", () => {
+  for (const origin of DEMO_ORIGINS) {
+    for (const destination of DEMO_DESTINATIONS) {
+      const routes = ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes("Sep"));
+      assert.ok(routes.length >= 3, `${origin}-${destination} only has ${routes.length} routes`);
+    }
+  }
+});
+
+test("NRT to SEA now compares direct, connection, and multi-city choices", () => {
+  const routes = ROUTES.filter((route) => route.origin === "NRT" && route.destination === "SEA" && route.months.includes("Sep"));
+  assert.deepEqual(new Set(routes.map((route) => route.ticketType)), new Set(["direct", "connection", "multi-city"]));
+  assert.ok(routes.length >= 5);
 });
 
 test("both shared-bar boundaries preserve a 100 percent total", () => {
