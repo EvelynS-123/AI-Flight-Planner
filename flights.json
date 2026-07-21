@@ -1,0 +1,301 @@
+{
+  "countries": [
+    { "code": "US", "name": "United States" },
+    { "code": "CA", "name": "Canada" },
+    { "code": "GB", "name": "United Kingdom" },
+    { "code": "CN", "name": "China" },
+    { "code": "JP", "name": "Japan" },
+    { "code": "KR", "name": "South Korea" },
+    { "code": "SG", "name": "Singapore" },
+    { "code": "AE", "name": "United Arab Emirates" },
+    { "code": "AU", "name": "Australia" },
+    { "code": "NZ", "name": "New Zealand" },
+    { "code": "DE", "name": "Germany" },
+    { "code": "FR", "name": "France" },
+    { "code": "IT", "name": "Italy" },
+    { "code": "ES", "name": "Spain" },
+    { "code": "NL", "name": "Netherlands" },
+    { "code": "CH", "name": "Switzerland" },
+    { "code": "SE", "name": "Sweden" },
+    { "code": "NO", "name": "Norway" },
+    { "code": "IN", "name": "India" },
+    { "code": "TH", "name": "Thailand" },
+    { "code": "VN", "name": "Vietnam" },
+    { "code": "MY", "name": "Malaysia" },
+    { "code": "ID", "name": "Indonesia" },
+    { "code": "PH", "name": "Philippines" },
+    { "code": "HK", "name": "Hong Kong" },
+    { "code": "TW", "name": "Taiwan" },
+    { "code": "BR", "name": "Brazil" },
+    { "code": "MX", "name": "Mexico" },
+    { "code": "ZA", "name": "South Africa" },
+    { "code": "EG", "name": "Egypt" },
+    { "code": "TR", "name": "Turkey" },
+    { "code": "RU", "name": "Russia" },
+    { "code": "SA", "name": "Saudi Arabia" },
+    { "code": "QA", "name": "Qatar" },
+    { "code": "IE", "name": "Ireland" },
+    { "code": "PT", "name": "Portugal" },
+    { "code": "PL", "name": "Poland" },
+    { "code": "GR", "name": "Greece" },
+    { "code": "IL", "name": "Israel" },
+    { "code": "AR", "name": "Argentina" },
+    { "code": "CL", "name": "Chile" }
+  ],
+
+  "airports": {
+    "HKG": { "city": "Hong Kong",       "country": "HK", "attractiveness": 85, "accessMinutes": 30, "tags": ["shopping", "food", "nightlife"] },
+    "LAX": { "city": "Los Angeles",     "country": "US", "attractiveness": 72, "accessMinutes": 40, "tags": ["food", "technology", "nightlife", "shopping"] },
+    "SFO": { "city": "San Francisco",   "country": "US", "attractiveness": 68, "accessMinutes": 25, "tags": ["technology", "food", "culture"] },
+    "ICN": { "city": "Seoul",           "country": "KR", "attractiveness": 82, "accessMinutes": 55, "tags": ["food", "technology", "nightlife", "shopping"] },
+    "NRT": { "city": "Tokyo",           "country": "JP", "attractiveness": 92, "accessMinutes": 60, "tags": ["culture", "food", "technology"] },
+    "HND": { "city": "Tokyo (Haneda)",  "country": "JP", "attractiveness": 90, "accessMinutes": 35, "tags": ["culture", "food", "technology"] },
+    "HNL": { "city": "Honolulu",        "country": "US", "attractiveness": 96, "accessMinutes": 25, "tags": ["nature", "relaxation"] },
+    "MNL": { "city": "Manila",          "country": "PH", "attractiveness": 58, "accessMinutes": 75, "tags": ["culture", "food"] },
+    "YVR": { "city": "Vancouver",       "country": "CA", "attractiveness": 80, "accessMinutes": 40, "tags": ["nature", "culture"] },
+    "SIN": { "city": "Singapore",       "country": "SG", "attractiveness": 90, "accessMinutes": 30, "tags": ["shopping", "food", "nature"] },
+    "DXB": { "city": "Dubai",           "country": "AE", "attractiveness": 85, "accessMinutes": 35, "tags": ["shopping", "nightlife"] },
+    "LHR": { "city": "London",          "country": "GB", "attractiveness": 88, "accessMinutes": 60, "tags": ["culture", "food", "shopping"] },
+    "LGW": { "city": "London (Gatwick)","country": "GB", "attractiveness": 80, "accessMinutes": 75, "tags": ["culture", "food", "shopping"] },
+    "CDG": { "city": "Paris",           "country": "FR", "attractiveness": 93, "accessMinutes": 50, "tags": ["culture", "food", "shopping"] },
+    "FRA": { "city": "Frankfurt",       "country": "DE", "attractiveness": 60, "accessMinutes": 45, "tags": ["technology", "culture"] },
+    "AMS": { "city": "Amsterdam",       "country": "NL", "attractiveness": 87, "accessMinutes": 30, "tags": ["culture", "nature", "nightlife"] },
+    "IST": { "city": "Istanbul",        "country": "TR", "attractiveness": 89, "accessMinutes": 45, "tags": ["culture", "food", "shopping"] },
+    "DOH": { "city": "Doha",            "country": "QA", "attractiveness": 75, "accessMinutes": 30, "tags": ["shopping", "technology"] },
+    "BKK": { "city": "Bangkok",         "country": "TH", "attractiveness": 91, "accessMinutes": 50, "tags": ["food", "culture", "nightlife"] },
+    "KUL": { "city": "Kuala Lumpur",    "country": "MY", "attractiveness": 78, "accessMinutes": 60, "tags": ["shopping", "food", "nature"] },
+    "CGK": { "city": "Jakarta",         "country": "ID", "attractiveness": 55, "accessMinutes": 90, "tags": ["culture", "food"] },
+    "TPE": { "city": "Taipei",          "country": "TW", "attractiveness": 84, "accessMinutes": 45, "tags": ["food", "technology", "culture"] },
+    "SYD": { "city": "Sydney",          "country": "AU", "attractiveness": 90, "accessMinutes": 45, "tags": ["nature", "culture", "food"] },
+    "AKL": { "city": "Auckland",        "country": "NZ", "attractiveness": 82, "accessMinutes": 40, "tags": ["nature", "relaxation"] },
+    "JNB": { "city": "Johannesburg",    "country": "ZA", "attractiveness": 65, "accessMinutes": 50, "tags": ["culture", "nature"] },
+    "GRU": { "city": "Sao Paulo",       "country": "BR", "attractiveness": 62, "accessMinutes": 55, "tags": ["food", "nightlife", "culture"] },
+    "MEX": { "city": "Mexico City",     "country": "MX", "attractiveness": 76, "accessMinutes": 50, "tags": ["culture", "food", "nightlife"] },
+    "SCL": { "city": "Santiago",        "country": "CL", "attractiveness": 70, "accessMinutes": 40, "tags": ["nature", "culture"] },
+    "TLV": { "city": "Tel Aviv",        "country": "IL", "attractiveness": 81, "accessMinutes": 25, "tags": ["culture", "food", "nightlife"] },
+    "ATH": { "city": "Athens",          "country": "GR", "attractiveness": 88, "accessMinutes": 45, "tags": ["culture", "nature", "food"] },
+    "LIS": { "city": "Lisbon",          "country": "PT", "attractiveness": 85, "accessMinutes": 25, "tags": ["culture", "food", "nightlife"] },
+    "ZRH": { "city": "Zurich",          "country": "CH", "attractiveness": 79, "accessMinutes": 15, "tags": ["nature", "technology", "shopping"] },
+    "JFK": { "city": "New York",        "country": "US", "attractiveness": 75, "accessMinutes": 45, "tags": ["culture", "food", "nightlife", "shopping"] },
+    "DEL": { "city": "Delhi",           "country": "IN", "attractiveness": 70, "accessMinutes": 60, "tags": ["culture", "food"] }
+  },
+
+  "visaTransitRestrictions": {
+    "CA": {
+      "note": "Transiting/entering Canada requires a visa or eTA unless the passport is in exemptPassports.",
+      "exemptPassports": ["US", "CA", "GB", "AU", "NZ", "JP", "KR", "SG", "DE", "FR", "IE"]
+    },
+    "IN": {
+      "note": "Transiting/entering India requires a visa unless the passport is in exemptPassports.",
+      "exemptPassports": ["US", "GB", "SG", "JP", "AU", "CA"]
+    },
+    "TR": {
+      "note": "Transiting/entering Turkey requires an e-visa unless the passport is in exemptPassports.",
+      "exemptPassports": ["US", "GB", "DE", "FR", "NL", "JP"]
+    }
+  },
+
+  "itineraries": [
+    { "id": "A", "origin": "HKG", "destination": "LAX", "stopover": null,
+      "price": 550, "totalDurationMin": 780, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "note": "Cheapest direct-style baseline, limited experience value" },
+
+    { "id": "B", "origin": "HKG", "destination": "LAX", "stopover": "NRT",
+      "price": 610, "totalDurationMin": 1020, "stops": 1, "layoverMin": 1440,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": true, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 10, "note": "Strong city value, good access, daytime stopover" },
+
+    { "id": "C", "origin": "HKG", "destination": "LAX", "stopover": "HNL",
+      "price": 640, "totalDurationMin": 1260, "stops": 1, "layoverMin": 1800,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": true, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 9, "note": "Highest experience value, long usable stopover" },
+
+    { "id": "D", "origin": "HKG", "destination": "LAX", "stopover": "MNL",
+      "price": 500, "totalDurationMin": 1080, "stops": 1, "layoverMin": 600,
+      "requiresAirportChange": false, "requiresSelfTransfer": true, "overnightTransfer": false, "baggageThroughChecked": false,
+      "stopoverArrivalHour": 7, "note": "Lowest price via self-transfer, moderate experience value" },
+
+    { "id": "E", "origin": "HKG", "destination": "LAX", "stopover": "YVR",
+      "price": 700, "totalDurationMin": 960, "stops": 1, "layoverMin": 480,
+      "requiresAirportChange": true, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 11, "note": "Good city value, but visa filter may remove it for some users" },
+
+    { "id": "F1", "origin": "SFO", "destination": "ICN", "stopover": "NRT",
+      "price": 610, "totalDurationMin": 1020, "stops": 1, "layoverMin": 1440,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": true, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 15, "note": "Excellent stopover experience in Tokyo" },
+
+    { "id": "F2", "origin": "SFO", "destination": "ICN", "stopover": "SIN",
+      "price": 540, "totalDurationMin": 1320, "stops": 1, "layoverMin": 720,
+      "requiresAirportChange": false, "requiresSelfTransfer": true, "overnightTransfer": false, "baggageThroughChecked": false,
+      "stopoverArrivalHour": 14, "note": "Most affordable via self-transfer, Changi stopover" },
+
+    { "id": "F3", "origin": "SFO", "destination": "ICN", "stopover": "DXB",
+      "price": 720, "totalDurationMin": 1200, "stops": 1, "layoverMin": 480,
+      "requiresAirportChange": true, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 6, "note": "Relatively direct routing with shorter stopover" },
+
+    { "id": "G1", "origin": "LHR", "destination": "SYD", "stopover": null,
+      "price": 1450, "totalDurationMin": 1260, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "note": "Ultra-long-haul direct baseline, premium price, zero experience value" },
+
+    { "id": "G2", "origin": "LHR", "destination": "SYD", "stopover": "SIN",
+      "price": 980, "totalDurationMin": 1440, "stops": 1, "layoverMin": 360,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 14, "note": "Comfortable daytime stopover in Singapore" },
+
+    { "id": "G3", "origin": "LHR", "destination": "SYD", "stopover": "DXB",
+      "price": 1020, "totalDurationMin": 1380, "stops": 1, "layoverMin": 300,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 10, "note": "Short, convenient Dubai stopover" },
+
+    { "id": "G4", "origin": "LHR", "destination": "SYD", "stopover": "BKK",
+      "price": 890, "totalDurationMin": 1560, "stops": 1, "layoverMin": 840,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": true, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 20, "note": "Long overnight stopover, strong Bangkok experience value" },
+
+    { "id": "G5", "origin": "LHR", "destination": "SYD", "stopover": "DOH",
+      "price": 950, "totalDurationMin": 1470, "stops": 1, "layoverMin": 240,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 6, "note": "Early-morning arrival, moderate Doha stopover" },
+
+    { "id": "G6", "origin": "LHR", "destination": "SYD", "stopover": "IST",
+      "price": 780, "totalDurationMin": 1800, "stops": 2, "layoverMin": 180,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 13, "note": "2 stops via Istanbul then Kuala Lumpur; Istanbul modeled as the primary stopover. Visa filter may remove it for some passports." },
+
+    { "id": "G7", "origin": "LHR", "destination": "SYD", "stopover": "CGK",
+      "price": 650, "totalDurationMin": 2040, "stops": 3, "layoverMin": 300,
+      "requiresAirportChange": false, "requiresSelfTransfer": true, "overnightTransfer": false, "baggageThroughChecked": false,
+      "stopoverArrivalHour": 16, "note": "3-stop budget routing via Jakarta; tests the 3-or-more-stops directness edge case" },
+
+    { "id": "H1", "origin": "JFK", "destination": "NRT", "stopover": null,
+      "price": 1100, "totalDurationMin": 840, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "note": "Fast nonstop baseline" },
+
+    { "id": "H2", "origin": "JFK", "destination": "NRT", "stopover": "YVR",
+      "price": 820, "totalDurationMin": 1140, "stops": 1, "layoverMin": 600,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 12, "note": "Comfortable Vancouver stopover; visa filter may remove it for some passports" },
+
+    { "id": "H3", "origin": "JFK", "destination": "NRT", "stopover": "LAX",
+      "price": 760, "totalDurationMin": 1200, "stops": 1, "layoverMin": 420,
+      "requiresAirportChange": true, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 9, "note": "Requires an airport change in Los Angeles" },
+
+    { "id": "H4", "origin": "JFK", "destination": "NRT", "stopover": "ICN",
+      "price": 690, "totalDurationMin": 1320, "stops": 1, "layoverMin": 960,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": true, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 19, "note": "Overnight Seoul stopover, budget-friendly" },
+
+    { "id": "I1", "origin": "CDG", "destination": "SIN", "stopover": null,
+      "price": 980, "totalDurationMin": 780, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "note": "Nonstop baseline" },
+
+    { "id": "I2", "origin": "CDG", "destination": "SIN", "stopover": "DXB",
+      "price": 720, "totalDurationMin": 1020, "stops": 1, "layoverMin": 480,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 5, "note": "Early-morning Dubai stopover" },
+
+    { "id": "I3", "origin": "CDG", "destination": "SIN", "stopover": "IST",
+      "price": 610, "totalDurationMin": 1200, "stops": 1, "layoverMin": 540,
+      "requiresAirportChange": false, "requiresSelfTransfer": true, "overnightTransfer": false, "baggageThroughChecked": false,
+      "stopoverArrivalHour": 22, "note": "Cheapest option via self-transfer in Istanbul; visa filter may remove it for some passports" },
+
+    { "id": "I4", "origin": "CDG", "destination": "SIN", "stopover": "FRA",
+      "price": 650, "totalDurationMin": 930, "stops": 1, "layoverMin": 70,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 11, "note": "Layover is shorter than the recommended minimum connection time — good test case for the connection-pace penalty" },
+
+    { "id": "J1", "origin": "GRU", "destination": "LHR", "stopover": null,
+      "price": 890, "totalDurationMin": 660, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "note": "Nonstop baseline" },
+
+    { "id": "J2", "origin": "GRU", "destination": "LHR", "stopover": "LIS",
+      "price": 640, "totalDurationMin": 900, "stops": 1, "layoverMin": 720,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 9, "note": "Pleasant daytime Lisbon stopover" },
+
+    { "id": "J3", "origin": "GRU", "destination": "LHR", "stopover": "MEX",
+      "price": 520, "totalDurationMin": 1140, "stops": 1, "layoverMin": 840,
+      "requiresAirportChange": true, "requiresSelfTransfer": true, "overnightTransfer": true, "baggageThroughChecked": false,
+      "stopoverArrivalHour": 21, "note": "Cheapest option but stacks every convenience penalty — good stress test for the convenience score" },
+
+    { "id": "K1", "origin": "SYD", "destination": "ZRH", "stopover": null,
+      "price": 1600, "totalDurationMin": 1320, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "note": "Premium nonstop baseline" },
+
+    { "id": "K2", "origin": "SYD", "destination": "ZRH", "stopover": "SIN",
+      "price": 1150, "totalDurationMin": 1500, "stops": 1, "layoverMin": 1080,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": true, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 14, "note": "Long, high-value overnight Singapore stopover" },
+
+    { "id": "K3", "origin": "SYD", "destination": "ZRH", "stopover": "DOH",
+      "price": 980, "totalDurationMin": 1800, "stops": 2, "layoverMin": 600,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": true, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 23, "note": "2 stops via Auckland then Doha; Doha modeled as the primary stopover" },
+
+    { "id": "K4", "origin": "SYD", "destination": "ZRH", "stopover": "TLV",
+      "price": 890, "totalDurationMin": 1620, "stops": 1, "layoverMin": 1200,
+      "requiresAirportChange": false, "requiresSelfTransfer": true, "overnightTransfer": true, "baggageThroughChecked": false,
+      "stopoverArrivalHour": 8, "note": "Budget self-transfer routing with a long Tel Aviv stopover" },
+
+    { "id": "L1", "origin": "LHR", "destination": "BKK", "stopover": "DEL",
+      "price": 580, "totalDurationMin": 960, "stops": 1, "layoverMin": 540,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 13, "note": "Budget routing via Delhi; visa filter may remove it for some passports" },
+
+    { "id": "L2", "origin": "LHR", "destination": "BKK", "stopover": null,
+      "price": 780, "totalDurationMin": 720, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "note": "Nonstop baseline" },
+
+    { "id": "M1", "origin": "ZRH", "destination": "TPE", "stopover": null,
+      "price": 1200, "totalDurationMin": 780, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "note": "Nonstop baseline" },
+
+    { "id": "M2", "origin": "ZRH", "destination": "TPE", "stopover": "BKK",
+      "price": 850, "totalDurationMin": 1080, "stops": 1, "layoverMin": 660,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 10, "note": "Comfortable daytime Bangkok stopover" },
+
+    { "id": "M3", "origin": "ZRH", "destination": "TPE", "stopover": "ICN",
+      "price": 900, "totalDurationMin": 1020, "stops": 1, "layoverMin": 360,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 16, "note": "Short, efficient Seoul stopover" },
+
+    { "id": "N1", "origin": "JNB", "destination": "ATH", "stopover": null,
+      "price": 780, "totalDurationMin": 600, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "note": "Nonstop baseline" },
+
+    { "id": "N2", "origin": "JNB", "destination": "ATH", "stopover": "DOH",
+      "price": 590, "totalDurationMin": 840, "stops": 1, "layoverMin": 420,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 3, "note": "Late-night Doha stopover — tests the low time-window-quality bucket" },
+
+    { "id": "N3", "origin": "JNB", "destination": "ATH", "stopover": "IST",
+      "price": 540, "totalDurationMin": 900, "stops": 1, "layoverMin": 480,
+      "requiresAirportChange": false, "requiresSelfTransfer": true, "overnightTransfer": false, "baggageThroughChecked": false,
+      "stopoverArrivalHour": 1, "note": "Arrival is entirely after midnight — tests the lowest time-window-quality bucket; visa filter may remove it for some passports" },
+
+    { "id": "X-INVALID-NEGATIVE-LAYOVER", "origin": "HKG", "destination": "LAX", "stopover": "NRT",
+      "price": 600, "totalDurationMin": 1050, "stops": 1, "layoverMin": -30,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": 10, "_intentionallyInvalid": true,
+      "note": "Deliberately corrupted record (negative layover time) for testing the Data Validity Filter — should be dropped before scoring" },
+
+    { "id": "X-INVALID-ZERO-DURATION", "origin": "SFO", "destination": "ICN", "stopover": null,
+      "price": 400, "totalDurationMin": 0, "stops": 0, "layoverMin": 0,
+      "requiresAirportChange": false, "requiresSelfTransfer": false, "overnightTransfer": false, "baggageThroughChecked": true,
+      "stopoverArrivalHour": null, "_intentionallyInvalid": true,
+      "note": "Deliberately corrupted record (zero total duration) for testing the Data Validity Filter — should be dropped before scoring" }
+  ]
+}
