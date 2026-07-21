@@ -129,7 +129,9 @@ button:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid
 .route-main, .route-codes { min-width: 0; }
 .route-codes { display: flex; align-items: center; gap: 9px; font-size: 20px; letter-spacing: -0.025em; }
 .route-hop { display: contents; }
-.hub-code { padding: 5px 8px; color: #6e4d17; background: #f4e4cc; border-radius: 8px 11px 8px 10px; font-weight: 720; }
+.hub-code { padding: 5px 8px; border-radius: 8px 11px 8px 10px; font-weight: 720; transition: color 220ms ease, background 220ms ease; }
+.hub-code.connection-hub { color: #315f81; background: #dfeef8; }
+.hub-code.multi-city-hub { color: #6e4d17; background: #f4e4cc; }
 .route-meta { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 7px; color: var(--muted); font-size: 12px; }
 .route-meta span { position: relative; }
 .route-meta span + span::before { content: ""; position: absolute; top: 6px; left: -8px; width: 3px; height: 3px; background: #b7bac0; border-radius: 50%; }

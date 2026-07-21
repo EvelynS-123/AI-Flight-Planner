@@ -338,7 +338,17 @@ export default function RouteFinder() {
                       <div className="route-main">
                         <div className="route-codes">
                           <strong>{route.origin}</strong>
-                          {route.hubs.map((hub) => <span className="route-hop" key={hub}><Arrow /><span className="hub-code">{hub}</span></span>)}
+                          {route.hubs.map((hub) => (
+                            <span className="route-hop" key={hub}>
+                              <Arrow />
+                              <span
+                                className={`hub-code ${route.ticketType === "connection" ? "connection-hub" : "multi-city-hub"}`}
+                                title={`${route.ticketType === "connection" ? "联程" : "Multicity"} 中转机场 · ${AIRPORTS[hub]?.city ?? hub}`}
+                              >
+                                {hub}
+                              </span>
+                            </span>
+                          ))}
                           <Arrow /><strong>{route.destination}</strong>
                         </div>
                         <div className="route-meta">
