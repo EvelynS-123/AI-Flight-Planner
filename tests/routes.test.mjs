@@ -37,6 +37,12 @@ test("both shared-bar boundaries preserve a 100 percent total", () => {
   assert.equal(second.price + second.interest + second.directness, 100);
 });
 
+test("either boundary can reopen a collapsed middle weight", () => {
+  const collapsed = { price: 50, interest: 0, directness: 50 };
+  assert.deepEqual(moveWeightBoundary(collapsed, "price-interest", 40), { price: 40, interest: 10, directness: 50 });
+  assert.deepEqual(moveWeightBoundary(collapsed, "interest-directness", 60), { price: 50, interest: 10, directness: 40 });
+});
+
 test("changing weights changes the winner according to the selected priority", () => {
   const routes = ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX" && route.months.includes("Sep"));
   const cheapest = scoreRoutes(routes, { price: 100, interest: 0, directness: 0 }).sort((a, b) => b.scores.total - a.scores.total)[0];
