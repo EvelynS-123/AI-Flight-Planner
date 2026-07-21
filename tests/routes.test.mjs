@@ -4,9 +4,15 @@ import { DEMO_DESTINATIONS, DEMO_ORIGINS, ROUTES, moveWeightBoundary, scoreRoute
 
 test("demo includes a broad set of all three ticket types", () => {
   assert.ok(ROUTES.length >= 90);
-  assert.ok(ROUTES.some((route) => route.ticketType === "direct"));
-  assert.ok(ROUTES.some((route) => route.ticketType === "connection"));
+  assert.ok(ROUTES.filter((route) => route.ticketType === "direct").length >= 15);
+  assert.ok(ROUTES.filter((route) => route.ticketType === "connection").length >= 15);
   assert.ok(ROUTES.some((route) => route.ticketType === "multi-city"));
+});
+
+test("every connection names at least one transfer airport", () => {
+  for (const route of ROUTES.filter((item) => item.ticketType === "connection")) {
+    assert.ok(route.hubs.length > 0, `${route.id} is missing its transfer airport`);
+  }
 });
 
 test("default September search shows direct, connection, and multi-city choices", () => {

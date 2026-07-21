@@ -52,6 +52,9 @@ export const AIRPORTS: Record<string, { city: string; country: string }> = {
   KIX: { city: "大阪", country: "日本" },
   NRT: { city: "东京", country: "日本" },
   HNL: { city: "檀香山", country: "美国" },
+  CAN: { city: "广州", country: "中国" },
+  WUH: { city: "武汉", country: "中国" },
+  MNL: { city: "马尼拉", country: "菲律宾" },
   LAX: { city: "洛杉矶", country: "美国" },
   SFO: { city: "旧金山", country: "美国" },
   SEA: { city: "西雅图", country: "美国" },
@@ -193,21 +196,60 @@ function itinerary(
   };
 }
 
-// These are end-to-end, single-search itinerary observations. A displayed hub is
-// included only when the source exposed it; otherwise the UI says "1 次中转".
+function directItinerary(
+  id: string,
+  origin: AirportCode,
+  destination: AirportCode,
+  price: number,
+  date: string,
+  airline: string,
+  source: string,
+  url: string,
+): RouteOption {
+  return {
+    id,
+    origin,
+    destination,
+    hubs: [],
+    ticketType: "direct",
+    stopCount: 0,
+    months: [date.includes("08-") ? "Aug" : "Sep"],
+    segments: [{ from: origin, to: destination, price, date, airline, source, url, stops: 0 }],
+    total: price,
+  };
+}
+
+// Alternative nonstop observations stay separate from the graph's cheapest
+// segment so one airport pair can compare more than one real direct option.
+const DIRECT_ROUTES: RouteOption[] = [
+  directItinerary("pvg-lax-direct-united", "PVG", "LAX", 609, "2026-09-09", "United Airlines", "Trip.com", "https://www.trip.com/flights/airport-pvg-lax/"),
+  directItinerary("pvg-sfo-direct-mu", "PVG", "SFO", 709, "2026-09-10", "China Eastern Airlines", "Trip.com", "https://www.trip.com/flights/airport-pvg-sfo/"),
+  directItinerary("hkg-lax-direct-united", "HKG", "LAX", 410, "2026-09-02", "United Airlines", "Trip.com", "https://www.trip.com/flights/airport-hkg-lax/"),
+  directItinerary("hkg-sfo-direct-united", "HKG", "SFO", 430, "2026-09-14", "United Airlines", "Trip.com", "https://us.trip.com/flights/city-hkg-airport-sfo/"),
+  directItinerary("tpe-lax-direct-ci", "TPE", "LAX", 516, "2026-09-03", "China Airlines", "Trip.com", "https://www.trip.com/flights/airport-tpe-lax/"),
+  directItinerary("tpe-yvr-direct-ci", "TPE", "YVR", 579, "2026-09-14", "China Airlines", "Trip.com", "https://www.trip.com/flights/airport-tpe-city-yvr/"),
+];
+
+// These are end-to-end, single-search itinerary observations. Every connection
+// keeps only hubs that were exposed by the source's flight schedule.
 const CONNECTION_ROUTES: RouteOption[] = [
-  itinerary("pvg-lax-connection-cz", "PVG", "LAX", 506, "2026-08-28", "China Southern · source fare HK$3,943", "Trip.com", "https://www.trip.com/flights/airport-pvg-lax/"),
-  itinerary("pvg-lax-connection-sep", "PVG", "LAX", 457, "2026-09 route snapshot", "1-stop route fare · source fare HK$3,564", "Trip.com", "https://www.trip.com/flights/airport-pvg-lax/"),
-  itinerary("hkg-lax-connection-airpremia", "HKG", "LAX", 435, "2026-08-26", "Air Premia", "Trip.com", "https://www.trip.com/flights/airport-hkg-lax/"),
-  itinerary("tpe-lax-connection-pal", "TPE", "LAX", 456, "2026-08-26", "Philippine Airlines", "Google Flights", "https://www.google.com/travel/flights/flights-from-taipei-city-to-los-angeles.html?gl=US&hl=en-US"),
-  itinerary("pvg-sfo-connection-cz", "PVG", "SFO", 482, "2026-08-27", "China Southern", "Trip.com", "https://www.trip.com/flights/airport-pvg-sfo/"),
-  itinerary("pek-yvr-connection", "PEK", "YVR", 465, "2026-09-15", "1-stop itinerary", "Momondo", "https://www.momondo.com/flights/beijing-capital-international-airport-pek/vancouver-intl-airport-yvr"),
-  itinerary("hkg-yvr-connection-ke", "HKG", "YVR", 451, "2026-09-30", "Korean Air", "Google Flights", "https://www.google.com/travel/flights/flights-from-hong-kong-to-vancouver.html"),
-  itinerary("pvg-sea-connection-spring", "PVG", "SEA", 412, "2026-09-15", "Spring Airlines", "Skyscanner", "https://www.skyscanner.com/routes/pvg/sea/shanghai-pudong-to-seattle-tacoma-international.html"),
-  itinerary("tpe-yvr-connection-lion", "TPE", "YVR", 406, "2026-08-26", "Thai Lion Air", "Trip.com", "https://www.trip.com/flights/airport-tpe-city-yvr/"),
-  itinerary("kix-lax-connection-peach", "KIX", "LAX", 442, "2026-08-08", "Peach Aviation", "Trip.com", "https://www.trip.com/flights/airport-kix-lax/"),
-  itinerary("hkg-sea-connection", "HKG", "SEA", 570, "2026-08-31", "1-stop itinerary", "HolidayPrice", "https://holidayprice.com/flights/hongkong-hkg/seattle-sea/"),
-  itinerary("nrt-sea-connection-pal", "NRT", "SEA", 681, "2026-09-23", "Philippine Airlines · 1 stop", "Google Flights", "https://www.google.com/travel/flights/flights-from-tokyo-to-seattle.html?gl=US&hl=en-US"),
+  itinerary("pvg-lax-connection-cz", "PVG", "LAX", 451, "2026-09-07", "China Southern Airlines", "Trip.com", "https://www.trip.com/flights/airport-pvg-lax/", ["CAN"]),
+  itinerary("pvg-lax-connection-cathay", "PVG", "LAX", 455, "2026-09-11", "Cathay Pacific", "Trip.com", "https://www.trip.com/flights/airport-pvg-lax/", ["HKG"]),
+  itinerary("pvg-sfo-connection-cz", "PVG", "SFO", 462, "2026-09-03", "China Southern Airlines", "Trip.com", "https://www.trip.com/flights/airport-pvg-sfo/", ["WUH"]),
+  itinerary("pvg-sfo-connection-cathay", "PVG", "SFO", 482, "2026-09-12", "Cathay Pacific", "Trip.com", "https://www.trip.com/flights/airport-pvg-sfo/", ["HKG"]),
+  itinerary("hkg-lax-connection-airpremia", "HKG", "LAX", 435, "2026-08-26", "Air Premia", "Trip.com", "https://www.trip.com/flights/airport-hkg-lax/", ["ICN"]),
+  itinerary("hkg-lax-connection-ac", "HKG", "LAX", 396, "2026-09-13", "Air Canada", "Trip.com", "https://www.trip.com/flights/airport-hkg-lax/", ["YVR"]),
+  itinerary("hkg-lax-connection-ca", "HKG", "LAX", 407, "2026-09-05", "Air China", "Trip.com", "https://www.trip.com/flights/airport-hkg-lax/", ["PEK"]),
+  itinerary("hkg-lax-connection-jx", "HKG", "LAX", 416, "2026-09-05", "STARLUX Airlines", "Trip.com", "https://www.trip.com/flights/airport-hkg-lax/", ["TPE"]),
+  itinerary("hkg-sfo-connection-ac", "HKG", "SFO", 354, "2026-09-13", "Air Canada", "Trip.com", "https://us.trip.com/flights/city-hkg-airport-sfo/", ["YVR"]),
+  itinerary("hkg-sfo-connection-airpremia", "HKG", "SFO", 399, "2026-09-12", "Air Premia", "Trip.com", "https://us.trip.com/flights/city-hkg-airport-sfo/", ["ICN"]),
+  itinerary("hkg-sfo-connection-pal", "HKG", "SFO", 401, "2026-09-07", "Philippine Airlines", "Trip.com", "https://us.trip.com/flights/city-hkg-airport-sfo/", ["MNL"]),
+  itinerary("hkg-yvr-connection-ke", "HKG", "YVR", 451, "2026-09-30", "Korean Air", "Google Flights", "https://www.google.com/travel/flights/flights-from-hong-kong-to-vancouver.html", ["ICN"]),
+  itinerary("hkg-sea-connection-jx", "HKG", "SEA", 450, "2026-09-04", "STARLUX Airlines", "Google Flights", "https://www.google.com/travel/flights/flights-from-hong-kong-to-seattle.html?gl=US&hl=en-US", ["TPE"]),
+  itinerary("tpe-lax-connection-pal", "TPE", "LAX", 378, "2026-09-13", "Philippine Airlines", "Trip.com", "https://www.trip.com/flights/airport-tpe-lax/", ["MNL"]),
+  itinerary("tpe-yvr-connection-ac", "TPE", "YVR", 360, "2026-09-15", "Air Canada", "Trip.com", "https://www.trip.com/flights/airport-tpe-city-yvr/", ["KIX"]),
+  itinerary("nrt-lax-connection-ke", "NRT", "LAX", 437, "2026-09 route snapshot", "Korean Air", "Trip.com", "https://us.trip.com/flights/airport-nrt-lax/", ["ICN"]),
+  itinerary("nrt-sea-connection-pal", "NRT", "SEA", 681, "2026-09-23", "Philippine Airlines", "Google Flights", "https://www.google.com/travel/flights/flights-from-tokyo-to-seattle.html?gl=US&hl=en-US", ["MNL"]),
 ];
 
 const uniqueSegments = new Map<string, Segment>();
@@ -253,9 +295,9 @@ function buildRoutes() {
   return routes;
 }
 
-export const ROUTES: RouteOption[] = [...buildRoutes(), ...CONNECTION_ROUTES];
+export const ROUTES: RouteOption[] = [...buildRoutes(), ...DIRECT_ROUTES, ...CONNECTION_ROUTES];
 
-const HUB_INTEREST: Record<string, number> = { HNL: 98, NRT: 88, TPE: 84, ICN: 82 };
+const HUB_INTEREST: Record<string, number> = { HNL: 98, NRT: 88, HKG: 86, KIX: 86, TPE: 84, ICN: 82, YVR: 82, PEK: 80, MNL: 78, CAN: 76, WUH: 74 };
 
 export function scoreRoutes(routes: RouteOption[], weights: RouteWeights = { price: 30, interest: 35, directness: 35 }) {
   if (!routes.length) return [];
