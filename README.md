@@ -1,13 +1,35 @@
 # Via · AI Flight Planner Demo
 
-一个只聚焦核心功能的航线发现 MVP。它把东亚到北美的行程拆成两个独立航段搜索，例如 `PVG → HNL` 与 `HNL → LAX`，并用公开可查的 2026 年 8 至 9 月单程价格快照组合路线。
+Via is a focused MVP for discovering and ranking flight routes from East Asia to North America. It compares nonstop flights, single-ticket connecting itineraries, and separately ticketed multi-city combinations using public fare snapshots for August and September 2026.
 
-## 当前范围
+## Demo
 
-- 6 个东亚出发机场
-- 4 个北美西海岸到达机场
-- 35 条 two-ticket multi-city 组合
-- 综合、最低价和少折腾三种排序
-- 每个价格均保留来源链接和样本日期
+https://via-flight-planner-demo.xachaix.chatgpt.site
 
-价格是研究时的公开快照，不代表实时可售价格，也不保证两段日期可以直接衔接。
+## Current scope
+
+- 133 sample routes
+- 16 nonstop itineraries
+- 17 single-ticket connecting itineraries
+- 100 separately ticketed multi-city itineraries
+- 6 departure airports in East Asia
+- 4 arrival airports on the west coast of North America
+- One shared weighting bar for cheapest, most interesting, and most direct
+- Live score updates, animated number changes, and animated reordering
+- Simplified Chinese, English, Korean, and Japanese interfaces
+- Source links and sample dates retained for fare references
+
+## Run locally
+
+```bash
+npm install
+npm run dev
+```
+
+## Test
+
+```bash
+npm test
+```
+
+Fare data is provided only as a demonstration snapshot. It does not represent live availability, and separately ticketed segments may require independent booking and schedule verification.
