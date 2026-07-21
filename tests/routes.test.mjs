@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ROUTES, rebalanceWeights, scoreRoutes } from "../app/route-data.ts";
+import { ROUTES, moveWeightBoundary, scoreRoutes } from "../app/route-data.ts";
 
 test("demo includes a broad set of all three ticket types", () => {
   assert.ok(ROUTES.length >= 90);
@@ -14,10 +14,12 @@ test("default September search shows direct, connection, and multi-city choices"
   assert.deepEqual(new Set(routes.map((route) => route.ticketType)), new Set(["direct", "connection", "multi-city"]));
 });
 
-test("slider rebalance always preserves a 100 percent total", () => {
-  const next = rebalanceWeights({ price: 30, interest: 35, directness: 35 }, "price", 77);
-  assert.equal(next.price, 77);
-  assert.equal(next.price + next.interest + next.directness, 100);
+test("both shared-bar boundaries preserve a 100 percent total", () => {
+  const first = moveWeightBoundary({ price: 30, interest: 35, directness: 35 }, "price-interest", 50);
+  const second = moveWeightBoundary(first, "interest-directness", 80);
+  assert.deepEqual(first, { price: 50, interest: 15, directness: 35 });
+  assert.deepEqual(second, { price: 50, interest: 30, directness: 20 });
+  assert.equal(second.price + second.interest + second.directness, 100);
 });
 
 test("changing weights changes the winner according to the selected priority", () => {
