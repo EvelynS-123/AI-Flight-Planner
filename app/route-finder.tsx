@@ -2,7 +2,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import NumberFlow, { continuous } from "@number-flow/react";
-import { AIRPORTS, DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
+import { DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
+import { COPY, LOCALE_OPTIONS, airportCity, localizeAirlineLabel, localizeDateLabel, type Copy, type Locale } from "./i18n";
 
 const SCORE_NUMBER_PLUGINS = [continuous];
 
@@ -61,12 +62,11 @@ function SketchPlane({ size = 28 }: { size?: number }) {
   );
 }
 
-function AirportLabel({ code }: { code: string }) {
-  const airport = AIRPORTS[code];
+function AirportLabel({ code, locale }: { code: string; locale: Locale }) {
   return (
     <span className="airport-label">
       <strong>{code}</strong>
-      <span>{airport?.city}</span>
+      <span>{airportCity(code, locale)}</span>
     </span>
   );
 }
@@ -75,13 +75,14 @@ function Arrow() {
   return <span className="route-arrow" aria-hidden="true">→</span>;
 }
 
-function ticketCopy(route: RouteOption) {
-  if (route.ticketType === "direct") return { label: "直飞", detail: "一张票，无需中转" };
-  if (route.ticketType === "connection") return { label: "联程票", detail: `一个行程，${route.stopCount} 次中转` };
-  return { label: "Multicity", detail: `${route.segments.length} 张单程票，自行衔接` };
+function ticketCopy(route: RouteOption, copy: Copy) {
+  if (route.ticketType === "direct") return { label: copy.direct, detail: copy.directDetail };
+  if (route.ticketType === "connection") return { label: copy.connection, detail: copy.connectionDetail(route.stopCount) };
+  return { label: copy.multiCity, detail: copy.multiCityDetail(route.segments.length) };
 }
 
 export default function RouteFinder() {
+  const [locale, setLocale] = useState<Locale>("zh");
   const [origin, setOrigin] = useState<AirportCode>("PVG");
   const [destination, setDestination] = useState<AirportCode>("LAX");
   const [draftOrigin, setDraftOrigin] = useState<AirportCode>("PVG");
@@ -95,6 +96,8 @@ export default function RouteFinder() {
   const reorderAnimations = useRef(new Map<string, Animation>());
   const allocationBarRef = useRef<HTMLDivElement>(null);
   const activeBoundary = useRef<"price-interest" | "interest-directness" | null>(null);
+  const copy = COPY[locale];
+  const localeOption = LOCALE_OPTIONS.find((item) => item.code === locale)!;
 
   const results = useMemo(() => {
     const matched = ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
@@ -104,8 +107,8 @@ export default function RouteFinder() {
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
     for (const route of results) counts[route.ticketType] += 1;
-    return `直飞 ${counts.direct} 条，联程 ${counts.connection} 条，Multicity ${counts["multi-city"]} 条`;
-  }, [results]);
+    return copy.routeSummary(results.length, counts.direct, counts.connection, counts["multi-city"]);
+  }, [results, copy]);
   const handlesAreColliding = weights.interest <= 4;
 
   useLayoutEffect(() => {
@@ -147,6 +150,10 @@ export default function RouteFinder() {
     for (const animation of reorderAnimations.current.values()) animation.cancel();
     reorderAnimations.current.clear();
   }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = localeOption.htmlLang;
+  }, [localeOption.htmlLang]);
 
   useEffect(() => {
     const continueDrag = (event: globalThis.PointerEvent) => {
@@ -215,11 +222,19 @@ export default function RouteFinder() {
     <main className="planner">
       <OriginalArtDefs />
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Via 首页">
+        <a className="brand" href="#top" aria-label={copy.home}>
           <SketchPlane size={30} />
           <span>AI Flight Planner</span>
         </a>
-        <span className="demo-badge">2026 夏季样本</span>
+        <div className="topbar-actions">
+          <span className="demo-badge">{copy.demoBadge}</span>
+          <label className="language-picker">
+            <span className="sr-only">{copy.language}</span>
+            <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)} aria-label={copy.language}>
+              {LOCALE_OPTIONS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
+            </select>
+          </label>
+        </div>
       </header>
 
       <section className="hero" id="top">
@@ -229,36 +244,36 @@ export default function RouteFinder() {
           <BigPlane />
         </div>
         <div className="hero-copy-block">
-          <p className="eyebrow">MULTI-CITY ROUTE FINDER</p>
-          <h1>Make the journey<br />part of the adventure.</h1>
-          <p className="hero-copy">把直飞、联程票和分开出票的跨太平洋组合放在一起比较，让旅途本身也成为选择。</p>
+          <p className="eyebrow">{copy.heroEyebrow}</p>
+          <h1>{copy.heroTitle.split("\n").map((line, index) => <span key={line}>{index > 0 && <br />}{line}</span>)}</h1>
+          <p className="hero-copy">{copy.heroCopy}</p>
         </div>
 
-        <div className="search-card" aria-label="航线搜索">
+        <div className="search-card" aria-label={copy.searchAria}>
           <div className="field-grid">
             <label className="select-field">
-              <span>从哪里出发</span>
+              <span>{copy.from}</span>
               <select value={draftOrigin} onChange={(event) => setDraftOrigin(event.target.value as AirportCode)}>
-                {ORIGINS.map((code) => <option key={code} value={code}>{code} · {AIRPORTS[code].city}</option>)}
+                {ORIGINS.map((code) => <option key={code} value={code}>{code} · {airportCity(code, locale)}</option>)}
               </select>
             </label>
-            <button className="swap-button" type="button" onClick={swap} aria-label="交换出发地和目的地" disabled>↔</button>
+            <button className="swap-button" type="button" onClick={swap} aria-label={copy.swap} disabled>↔</button>
             <label className="select-field">
-              <span>到哪里</span>
+              <span>{copy.to}</span>
               <select value={draftDestination} onChange={(event) => setDraftDestination(event.target.value as AirportCode)}>
-                {DESTINATIONS.map((code) => <option key={code} value={code}>{code} · {AIRPORTS[code].city}</option>)}
+                {DESTINATIONS.map((code) => <option key={code} value={code}>{code} · {airportCity(code, locale)}</option>)}
               </select>
             </label>
             <label className="select-field month-field">
-              <span>出行月份</span>
+              <span>{copy.month}</span>
               <select value={month} onChange={(event) => setMonth(event.target.value as "Aug" | "Sep")}>
-                <option value="Aug">2026 年 8 月</option>
-                <option value="Sep">2026 年 9 月</option>
+                <option value="Aug">{copy.august}</option>
+                <option value="Sep">{copy.september}</option>
               </select>
             </label>
-            <button className="search-button" type="button" onClick={search}>查找航线</button>
+            <button className="search-button" type="button" onClick={search}>{copy.search}</button>
           </div>
-          <p className="search-note"><span aria-hidden="true">◉</span> 同时搜索直飞、联程与最多三段的组合路线，价格为单程美元快照，原币报价会在详情标注</p>
+          <p className="search-note"><span aria-hidden="true">◉</span> {copy.searchNote}</p>
         </div>
       </section>
 
@@ -266,17 +281,17 @@ export default function RouteFinder() {
         <section className="results-section" aria-live="polite">
           <div className="results-heading">
             <div>
-              <p className="eyebrow">ROUTE IDEAS</p>
-              <h2><AirportLabel code={origin} /> <Arrow /> <AirportLabel code={destination} /></h2>
-              <p>{results.length ? `找到 ${results.length} 条，${resultSummary}` : "当前样本里还没有这条路线"}</p>
+              <p className="eyebrow">{copy.routeIdeas}</p>
+              <h2><AirportLabel code={origin} locale={locale} /> <Arrow /> <AirportLabel code={destination} locale={locale} /></h2>
+              <p>{results.length ? resultSummary : copy.noRoute}</p>
             </div>
           </div>
 
           {results.length > 0 && (
-            <div className="weight-panel" aria-label="路线排序权重">
+            <div className="weight-panel" aria-label={copy.weightAria}>
               <div className="weight-intro">
-                <div><span>你的排序权重</span><strong>100%</strong></div>
-                <p>拖动两个分界点，在同一条 bar 上分配三项权重。</p>
+                <div><span>{copy.weightTitle}</span><strong>100%</strong></div>
+                <p>{copy.weightHelp}</p>
               </div>
               <div className="allocation-control">
                 <div className="allocation-stage">
@@ -289,7 +304,7 @@ export default function RouteFinder() {
                     className={`allocation-handle price-interest-handle ${handlesAreColliding ? "colliding" : ""}`}
                     type="button"
                     role="slider"
-                    aria-label="最便宜与最有趣的分界"
+                    aria-label={copy.firstBoundary}
                     aria-valuemin={0}
                     aria-valuemax={100 - weights.directness}
                     aria-valuenow={weights.price}
@@ -301,7 +316,7 @@ export default function RouteFinder() {
                     className={`allocation-handle interest-directness-handle ${handlesAreColliding ? "colliding" : ""}`}
                     type="button"
                     role="slider"
-                    aria-label="最有趣与最直接的分界"
+                    aria-label={copy.secondBoundary}
                     aria-valuemin={weights.price}
                     aria-valuemax={100}
                     aria-valuenow={weights.price + weights.interest}
@@ -311,9 +326,9 @@ export default function RouteFinder() {
                   />
                 </div>
                 <div className="allocation-legend">
-                  <span className="price"><i>¥</i>最便宜<strong>{weights.price}%</strong></span>
-                  <span className="interest"><i>✦</i>最有趣<strong>{weights.interest}%</strong></span>
-                  <span className="directness"><i>→</i>最直接<strong>{weights.directness}%</strong></span>
+                  <span className="price"><i>¥</i>{copy.cheapest}<strong>{weights.price}%</strong></span>
+                  <span className="interest"><i>✦</i>{copy.interesting}<strong>{weights.interest}%</strong></span>
+                  <span className="directness"><i>→</i>{copy.directest}<strong>{weights.directness}%</strong></span>
                 </div>
               </div>
             </div>
@@ -322,14 +337,14 @@ export default function RouteFinder() {
           {results.length === 0 ? (
             <div className="empty-state">
               <span aria-hidden="true">⌁</span>
-              <h3>换一个出发地或目的地试试</h3>
-              <p>本 demo 聚焦 4 个数据较完整的东亚出发机场和 4 个北美西海岸到达机场。</p>
+              <h3>{copy.emptyTitle}</h3>
+              <p>{copy.emptyBody}</p>
             </div>
           ) : (
             <div className="route-list">
               {results.map((route, index) => {
                 const isOpen = expanded === route.id;
-                const ticket = ticketCopy(route);
+                const ticket = ticketCopy(route, copy);
                 return (
                   <div className="route-motion" key={route.id} ref={(element) => { if (element) cardRefs.current.set(route.id, element); else cardRefs.current.delete(route.id); }}>
                   <article className={`route-card ${isOpen ? "open" : ""}`}>
@@ -343,7 +358,7 @@ export default function RouteFinder() {
                               <Arrow />
                               <span
                                 className={`hub-code ${route.ticketType === "connection" ? "connection-hub" : "multi-city-hub"}`}
-                                title={`${route.ticketType === "connection" ? "联程" : "Multicity"} 中转机场 · ${AIRPORTS[hub]?.city ?? hub}`}
+                                title={`${route.ticketType === "connection" ? copy.connectionHub : copy.multiCityHub} · ${airportCity(hub, locale)}`}
                               >
                                 {hub}
                               </span>
@@ -354,11 +369,11 @@ export default function RouteFinder() {
                         <div className="route-meta">
                           <span className={`ticket-pill ${route.ticketType}`}>{ticket.label}</span>
                           <span>{ticket.detail}</span>
-                          {route.hubs.length > 0 && <span>经 {route.hubs.map((hub) => AIRPORTS[hub]?.city ?? hub).join("、")}</span>}
+                          {route.hubs.length > 0 && <span>{copy.via} {route.hubs.map((hub) => airportCity(hub, locale)).join(locale === "en" ? ", " : "、")}</span>}
                         </div>
                       </div>
                       <div className="score-block">
-                        <span>实时得分</span>
+                        <span>{copy.liveScore}</span>
                         <strong>
                           <NumberFlow
                             className="score-number"
@@ -372,8 +387,8 @@ export default function RouteFinder() {
                         </strong>
                       </div>
                       <div className="price-block">
-                        <span>样本合计</span>
-                        <strong>${route.total.toLocaleString("en-US", { maximumFractionDigits: 2 })}</strong>
+                        <span>{copy.sampleTotal}</span>
+                        <strong>${route.total.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })}</strong>
                       </div>
                       <span className="disclosure" aria-hidden="true">⌄</span>
                     </button>
@@ -382,24 +397,24 @@ export default function RouteFinder() {
                       <div className="details-inner">
                         <div className="warning-strip">
                           <span aria-hidden="true">!</span>
-                          {route.ticketType === "multi-city" && <p>这是分开出票的 Multicity 灵感组合。各段价格来自独立搜索快照，日期未必可直接衔接，行李通常也不会直挂。</p>}
-                          {route.ticketType === "connection" && <p>这是同一次搜索里出现的端到端联程报价样本。实际是否同一票号、行李能否直挂及保护规则，仍要在出票页确认。</p>}
-                          {route.ticketType === "direct" && <p>这是直飞单程价格快照。航班计划与最终含税价格可能变化，请在出票页重新确认。</p>}
+                          {route.ticketType === "multi-city" && <p>{copy.multiCityWarning}</p>}
+                          {route.ticketType === "connection" && <p>{copy.connectionWarning}</p>}
+                          {route.ticketType === "direct" && <p>{copy.directWarning}</p>}
                         </div>
                         <div className="segments">
                           {route.segments.map((segment, segmentIndex) => (
                             <div className="segment" key={`${segment.from}-${segment.to}`}>
                               <div className="segment-number">{segmentIndex + 1}</div>
-                              <div className="segment-route"><strong>{segment.from} → {segment.to}</strong><span>{segment.airline}</span></div>
-                              <div className="segment-date"><span>价格日期</span><strong>{segment.date}</strong></div>
-                              <div className="segment-price"><strong>${segment.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}</strong><span>单程</span></div>
-                              <a href={segment.url} target="_blank" rel="noreferrer">查看 {segment.source} ↗</a>
+                              <div className="segment-route"><strong>{segment.from} → {segment.to}</strong><span>{localizeAirlineLabel(segment.airline, locale)}</span></div>
+                              <div className="segment-date"><span>{copy.priceDate}</span><strong>{localizeDateLabel(segment.date, locale)}</strong></div>
+                              <div className="segment-price"><strong>${segment.price.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })}</strong><span>{copy.oneWay}</span></div>
+                              <a href={segment.url} target="_blank" rel="noreferrer">{copy.view} {segment.source} ↗</a>
                             </div>
                           ))}
                         </div>
                         <div className="score-note">
-                          <strong>为什么排在这里</strong>
-                          <p>当前分数由最便宜 {weights.price}%、最有趣 {weights.interest}%、最直接 {weights.directness}% 实时计算。最有趣分基于中转城市的 demo 体验值，直飞的趣味项采用中性值。</p>
+                          <strong>{copy.whyHere}</strong>
+                          <p>{copy.scoreNote(weights.price, weights.interest, weights.directness)}</p>
                         </div>
                       </div>
                     </div>
@@ -414,7 +429,7 @@ export default function RouteFinder() {
 
       <footer>
         <span>Via · Core MVP</span>
-        <p>仅用于路线探索演示。最终价格、航班时刻和入境要求请以航空公司或出票平台为准。</p>
+        <p>{copy.footer}</p>
       </footer>
     </main>
   );

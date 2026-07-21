@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DEMO_DESTINATIONS, DEMO_ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes } from "../app/route-data.ts";
+import { AIRPORT_CITIES, COPY, LOCALE_OPTIONS } from "../app/i18n.ts";
 
 test("demo includes a broad set of all three ticket types", () => {
   assert.ok(ROUTES.length >= 90);
@@ -12,6 +13,16 @@ test("demo includes a broad set of all three ticket types", () => {
 test("every connection names at least one transfer airport", () => {
   for (const route of ROUTES.filter((item) => item.ticketType === "connection")) {
     assert.ok(route.hubs.length > 0, `${route.id} is missing its transfer airport`);
+  }
+});
+
+test("all four locales cover the complete interface and airport list", () => {
+  assert.deepEqual(LOCALE_OPTIONS.map((item) => item.code), ["zh", "en", "ko", "ja"]);
+  const airportCodes = new Set(ROUTES.flatMap((route) => [route.origin, route.destination, ...route.hubs]));
+  for (const { code } of LOCALE_OPTIONS) {
+    assert.ok(COPY[code].search.length > 0);
+    assert.ok(COPY[code].footer.length > 0);
+    for (const airportCode of airportCodes) assert.ok(AIRPORT_CITIES[code][airportCode], `${code} is missing ${airportCode}`);
   }
 });
 
