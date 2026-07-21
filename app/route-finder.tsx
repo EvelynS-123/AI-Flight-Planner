@@ -1,11 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AIRPORTS, ROUTES, scoreRoutes, type AirportCode } from "./route-data";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AIRPORTS, ROUTES, rebalanceWeights, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
 
-type SortMode = "balanced" | "price" | "directness";
-
-const ORIGINS: AirportCode[] = ["PVG", "PEK", "HKG", "TPE", "ICN", "KIX"];
+const ORIGINS: AirportCode[] = ["PVG", "PEK", "HKG", "TPE", "ICN", "KIX", "NRT"];
 const DESTINATIONS: AirportCode[] = ["LAX", "SFO", "SEA", "YVR"];
 
 function OriginalArtDefs() {
@@ -77,25 +75,57 @@ function Arrow() {
   return <span className="route-arrow" aria-hidden="true">→</span>;
 }
 
+function ticketCopy(route: RouteOption) {
+  if (route.ticketType === "direct") return { label: "直飞", detail: "一张票，无需中转" };
+  if (route.ticketType === "connection") return { label: "联程票", detail: `一个行程，${route.stopCount} 次中转` };
+  return { label: "Multicity", detail: `${route.segments.length} 张单程票，自行衔接` };
+}
+
 export default function RouteFinder() {
   const [origin, setOrigin] = useState<AirportCode>("PVG");
   const [destination, setDestination] = useState<AirportCode>("LAX");
   const [draftOrigin, setDraftOrigin] = useState<AirportCode>("PVG");
   const [draftDestination, setDraftDestination] = useState<AirportCode>("LAX");
   const [month, setMonth] = useState<"Aug" | "Sep">("Sep");
-  const [sort, setSort] = useState<SortMode>("balanced");
+  const [weights, setWeights] = useState<RouteWeights>({ price: 30, interest: 35, directness: 35 });
   const [expanded, setExpanded] = useState<string | null>(null);
   const [searched, setSearched] = useState(true);
+  const cardRefs = useRef(new Map<string, HTMLDivElement>());
+  const previousPositions = useRef(new Map<string, DOMRect>());
 
   const results = useMemo(() => {
     const matched = ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
-    const scored = scoreRoutes(matched);
-    return scored.sort((a, b) => {
-      if (sort === "price") return a.total - b.total;
-      if (sort === "directness") return b.scores.directness - a.scores.directness || a.total - b.total;
-      return b.scores.balanced - a.scores.balanced;
-    });
-  }, [origin, destination, month, sort]);
+    return scoreRoutes(matched, weights).sort((a, b) => b.scores.total - a.scores.total || a.total - b.total);
+  }, [origin, destination, month, weights]);
+
+  const resultSummary = useMemo(() => {
+    const counts = { direct: 0, connection: 0, "multi-city": 0 };
+    for (const route of results) counts[route.ticketType] += 1;
+    return `直飞 ${counts.direct} 条，联程 ${counts.connection} 条，Multicity ${counts["multi-city"]} 条`;
+  }, [results]);
+
+  useLayoutEffect(() => {
+    const nextPositions = new Map<string, DOMRect>();
+    for (const [id, element] of cardRefs.current) {
+      const next = element.getBoundingClientRect();
+      nextPositions.set(id, next);
+      const previous = previousPositions.current.get(id);
+      if (!previous) continue;
+      const delta = previous.top - next.top;
+      if (Math.abs(delta) < 1) continue;
+      element.style.transition = "none";
+      element.style.transform = `translate3d(0, ${delta}px, 0)`;
+      requestAnimationFrame(() => {
+        element.style.transition = "transform 420ms cubic-bezier(0.22, 1, 0.36, 1)";
+        element.style.transform = "translate3d(0, 0, 0)";
+      });
+    }
+    previousPositions.current = nextPositions;
+  }, [results]);
+
+  function updateWeight(key: keyof RouteWeights, value: number) {
+    setWeights((current) => rebalanceWeights(current, key, value));
+  }
 
   function search() {
     setOrigin(draftOrigin);
@@ -133,7 +163,7 @@ export default function RouteFinder() {
         <div className="hero-copy-block">
           <p className="eyebrow">MULTI-CITY ROUTE FINDER</p>
           <h1>Make the journey<br />part of the adventure.</h1>
-          <p className="hero-copy">把跨太平洋行程拆成两段，找到常规搜索容易漏掉的中转组合。</p>
+          <p className="hero-copy">把直飞、联程票和分开出票的跨太平洋组合放在一起比较，让旅途本身也成为选择。</p>
         </div>
 
         <div className="search-card" aria-label="航线搜索">
@@ -158,9 +188,9 @@ export default function RouteFinder() {
                 <option value="Sep">2026 年 9 月</option>
               </select>
             </label>
-            <button className="search-button" type="button" onClick={search}>查找两段路线</button>
+            <button className="search-button" type="button" onClick={search}>查找航线</button>
           </div>
-          <p className="search-note"><span aria-hidden="true">◉</span> 价格为各航段独立搜索的单程快照，不是实时联程报价</p>
+          <p className="search-note"><span aria-hidden="true">◉</span> 同时搜索直飞、联程与最多三段的组合路线，价格为单程美元快照，原币报价会在详情标注</p>
         </div>
       </section>
 
@@ -170,16 +200,36 @@ export default function RouteFinder() {
             <div>
               <p className="eyebrow">ROUTE IDEAS</p>
               <h2><AirportLabel code={origin} /> <Arrow /> <AirportLabel code={destination} /></h2>
-              <p>{results.length ? `找到 ${results.length} 条两段组合` : "当前样本里还没有这条路线"}</p>
+              <p>{results.length ? `找到 ${results.length} 条，${resultSummary}` : "当前样本里还没有这条路线"}</p>
             </div>
-            {results.length > 0 && (
-              <div className="segmented" role="group" aria-label="排序方式">
-                <button className={sort === "balanced" ? "active" : ""} onClick={() => setSort("balanced")}>综合</button>
-                <button className={sort === "price" ? "active" : ""} onClick={() => setSort("price")}>最低价</button>
-                <button className={sort === "directness" ? "active" : ""} onClick={() => setSort("directness")}>少折腾</button>
-              </div>
-            )}
           </div>
+
+          {results.length > 0 && (
+            <div className="weight-panel" aria-label="路线排序权重">
+              <div className="weight-intro">
+                <div><span>你的排序权重</span><strong>100%</strong></div>
+                <p>拖动任一项，路线分数与名次会实时变化。</p>
+              </div>
+              {([
+                ["price", "最便宜", "¥"],
+                ["interest", "最有趣", "✦"],
+                ["directness", "最直接", "→"],
+              ] as const).map(([key, label, icon]) => (
+                <label className={`weight-control weight-${key}`} key={key}>
+                  <span className="weight-label"><i>{icon}</i>{label}<strong>{weights[key]}%</strong></span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={weights[key]}
+                    onChange={(event) => updateWeight(key, Number(event.target.value))}
+                    style={{ "--weight": `${weights[key]}%` } as React.CSSProperties}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
 
           {results.length === 0 ? (
             <div className="empty-state">
@@ -191,23 +241,27 @@ export default function RouteFinder() {
             <div className="route-list">
               {results.map((route, index) => {
                 const isOpen = expanded === route.id;
+                const ticket = ticketCopy(route);
                 return (
-                  <article className={`route-card ${isOpen ? "open" : ""}`} key={route.id}>
+                  <div className="route-motion" key={route.id} ref={(element) => { if (element) cardRefs.current.set(route.id, element); else cardRefs.current.delete(route.id); }}>
+                  <article className={`route-card ${isOpen ? "open" : ""}`}>
                     <button className="route-summary" type="button" onClick={() => setExpanded(isOpen ? null : route.id)} aria-expanded={isOpen}>
                       <div className="rank">{index + 1}</div>
                       <div className="route-main">
                         <div className="route-codes">
-                          <strong>{route.origin}</strong><Arrow /><span className="hub-code">{route.hub}</span><Arrow /><strong>{route.destination}</strong>
+                          <strong>{route.origin}</strong>
+                          {route.hubs.map((hub) => <span className="route-hop" key={hub}><Arrow /><span className="hub-code">{hub}</span></span>)}
+                          <Arrow /><strong>{route.destination}</strong>
                         </div>
                         <div className="route-meta">
-                          <span>两张单程票</span>
-                          <span>在 {AIRPORTS[route.hub].city} 自行衔接</span>
-                          {route.segments.some((segment) => segment.stops > 0) && <span>某航段含经停</span>}
+                          <span className={`ticket-pill ${route.ticketType}`}>{ticket.label}</span>
+                          <span>{ticket.detail}</span>
+                          {route.hubs.length > 0 && <span>经 {route.hubs.map((hub) => AIRPORTS[hub]?.city ?? hub).join("、")}</span>}
                         </div>
                       </div>
                       <div className="score-block">
-                        <span>综合分</span>
-                        <strong>{Math.round(route.scores.balanced)}</strong>
+                        <span>实时得分</span>
+                        <strong key={Math.round(route.scores.total)}>{Math.round(route.scores.total)}</strong>
                       </div>
                       <div className="price-block">
                         <span>样本合计</span>
@@ -220,7 +274,9 @@ export default function RouteFinder() {
                       <div className="details-inner">
                         <div className="warning-strip">
                           <span aria-hidden="true">!</span>
-                          <p>这是 multi-city 灵感组合。两段价格来自不同搜索快照，日期未必可直接衔接，行李通常也不会直挂。</p>
+                          {route.ticketType === "multi-city" && <p>这是分开出票的 Multicity 灵感组合。各段价格来自独立搜索快照，日期未必可直接衔接，行李通常也不会直挂。</p>}
+                          {route.ticketType === "connection" && <p>这是同一次搜索里出现的端到端联程报价样本。实际是否同一票号、行李能否直挂及保护规则，仍要在出票页确认。</p>}
+                          {route.ticketType === "direct" && <p>这是直飞单程价格快照。航班计划与最终含税价格可能变化，请在出票页重新确认。</p>}
                         </div>
                         <div className="segments">
                           {route.segments.map((segment, segmentIndex) => (
@@ -235,11 +291,12 @@ export default function RouteFinder() {
                         </div>
                         <div className="score-note">
                           <strong>为什么排在这里</strong>
-                          <p>按原算法的综合模式计算，价格 30%，直达性 35%，体验 35%。当前 MVP 没有可靠体验数据，因此体验项统一设为中性值 50。</p>
+                          <p>当前分数由最便宜 {weights.price}%、最有趣 {weights.interest}%、最直接 {weights.directness}% 实时计算。最有趣分基于中转城市的 demo 体验值，直飞的趣味项采用中性值。</p>
                         </div>
                       </div>
                     </div>
                   </article>
+                  </div>
                 );
               })}
             </div>

@@ -1,16 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
+import { ROUTES, rebalanceWeights, scoreRoutes } from "../app/route-data.ts";
 
-test("route source contains the requested PVG-HNL-LAX split", async () => {
-  const source = await readFile(new URL("../app/route-data.ts", import.meta.url), "utf8");
-  assert.match(source, /pvg-hnl-lax/);
-  assert.match(source, /pvgHnl/);
-  assert.match(source, /hnlLax/);
+test("demo includes a broad set of all three ticket types", () => {
+  assert.ok(ROUTES.length >= 90);
+  assert.ok(ROUTES.some((route) => route.ticketType === "direct"));
+  assert.ok(ROUTES.some((route) => route.ticketType === "connection"));
+  assert.ok(ROUTES.some((route) => route.ticketType === "multi-city"));
 });
 
-test("every declared total is computed from two segment snapshots", async () => {
-  const source = await readFile(new URL("../app/route-data.ts", import.meta.url), "utf8");
-  assert.match(source, /a\.price \+ b\.price/);
-  assert.match(source, /segments: \[/);
+test("default September search shows direct, connection, and multi-city choices", () => {
+  const routes = ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX" && route.months.includes("Sep"));
+  assert.deepEqual(new Set(routes.map((route) => route.ticketType)), new Set(["direct", "connection", "multi-city"]));
+});
+
+test("slider rebalance always preserves a 100 percent total", () => {
+  const next = rebalanceWeights({ price: 30, interest: 35, directness: 35 }, "price", 77);
+  assert.equal(next.price, 77);
+  assert.equal(next.price + next.interest + next.directness, 100);
+});
+
+test("changing weights changes the winner according to the selected priority", () => {
+  const routes = ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX" && route.months.includes("Sep"));
+  const cheapest = scoreRoutes(routes, { price: 100, interest: 0, directness: 0 }).sort((a, b) => b.scores.total - a.scores.total)[0];
+  const mostDirect = scoreRoutes(routes, { price: 0, interest: 0, directness: 100 }).sort((a, b) => b.scores.total - a.scores.total)[0];
+  assert.equal(cheapest.total, Math.min(...routes.map((route) => route.total)));
+  assert.equal(mostDirect.ticketType, "direct");
 });
