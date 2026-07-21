@@ -8,6 +8,61 @@ type SortMode = "balanced" | "price" | "directness";
 const ORIGINS: AirportCode[] = ["PVG", "PEK", "HKG", "TPE", "ICN", "KIX"];
 const DESTINATIONS: AirportCode[] = ["LAX", "SFO", "SEA", "YVR"];
 
+function OriginalArtDefs() {
+  return (
+    <svg width="0" height="0" className="art-defs" aria-hidden="true">
+      <defs>
+        <filter id="gouache" x="-8%" y="-8%" width="116%" height="116%">
+          <feTurbulence type="turbulence" baseFrequency="0.035 0.06" numOctaves="3" seed="2" result="warp" />
+          <feDisplacementMap in="SourceGraphic" in2="warp" scale="6" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+        <filter id="softedge" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="8" result="warp" />
+          <feDisplacementMap in="SourceGraphic" in2="warp" scale="4" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </defs>
+    </svg>
+  );
+}
+
+function SketchCloud({ width = 220 }: { width?: number }) {
+  return (
+    <svg width={width} height={width * 0.48} viewBox="0 0 220 105" fill="none" aria-hidden="true" filter="url(#softedge)">
+      <ellipse cx="110" cy="72" rx="100" ry="30" fill="white" fillOpacity="0.72" />
+      <ellipse cx="72" cy="58" rx="52" ry="38" fill="white" fillOpacity="0.78" />
+      <ellipse cx="148" cy="54" rx="44" ry="34" fill="white" fillOpacity="0.72" />
+      <ellipse cx="110" cy="46" rx="38" ry="32" fill="white" fillOpacity="0.82" />
+      <ellipse cx="84" cy="36" rx="28" ry="24" fill="white" fillOpacity="0.75" />
+      <ellipse cx="134" cy="33" rx="24" ry="20" fill="white" fillOpacity="0.68" />
+      <path d="M75 52 C85 48 100 50 110 52" stroke="white" strokeWidth="3" strokeLinecap="round" opacity="0.5" />
+      <ellipse cx="110" cy="80" rx="88" ry="12" fill="#C8DFF0" fillOpacity="0.22" />
+    </svg>
+  );
+}
+
+function BigPlane() {
+  return (
+    <svg className="big-plane" viewBox="0 0 220 80" fill="none" aria-hidden="true" filter="url(#gouache)">
+      <path d="M20 42 C28 38 60 34 110 33 C155 32 185 35 200 40 C208 43 205 50 195 52 C165 56 120 56 70 54 C45 53 22 50 20 42Z" fill="white" fillOpacity="0.9" />
+      <path d="M40 50 C80 52 140 52 185 49" stroke="#D0E8F4" strokeWidth="3" strokeLinecap="round" opacity="0.55" />
+      <path d="M195 40 C208 40 216 44 214 47 C212 50 202 52 195 52Z" fill="white" fillOpacity="0.9" />
+      <path d="M100 50 C110 50 125 52 140 68 C148 76 145 80 138 78 C120 72 104 60 100 56Z" fill="white" fillOpacity="0.82" />
+      <path d="M26 42 C22 36 18 26 22 24 C26 22 34 30 38 38Z" fill="white" fillOpacity="0.8" />
+      <path d="M26 48 C20 52 14 56 12 54 C10 52 18 46 26 46Z" fill="white" fillOpacity="0.72" />
+      {[145, 158, 171, 184].map((x) => <ellipse key={x} cx={x} cy="43" rx="4" ry="3" fill="#B8D8F0" fillOpacity="0.55" />)}
+      <path d="M18 44 C8 43 -10 44 -30 46" stroke="white" strokeWidth="2.5" strokeLinecap="round" opacity="0.4" />
+    </svg>
+  );
+}
+
+function SketchPlane({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" aria-hidden="true">
+      <path d="M24 14 L8 6 L10 13 L4 14 L10 15 L8 22 Z" fill="#5A9CC0" fillOpacity="0.9" stroke="#3A7EA8" strokeWidth="0.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function AirportLabel({ code }: { code: string }) {
   const airport = AIRPORTS[code];
   return (
@@ -59,19 +114,27 @@ export default function RouteFinder() {
   }
 
   return (
-    <main>
+    <main className="planner">
+      <OriginalArtDefs />
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Via 首页">
-          <span className="brand-mark" aria-hidden="true">V</span>
-          <span>Via</span>
+          <SketchPlane size={30} />
+          <span>AI Flight Planner</span>
         </a>
         <span className="demo-badge">2026 夏季样本</span>
       </header>
 
       <section className="hero" id="top">
-        <p className="eyebrow">MULTI-CITY ROUTE FINDER</p>
-        <h1>有些好路线，<br />不在一次搜索里。</h1>
-        <p className="hero-copy">把跨太平洋行程拆成两段，发现常规搜索容易漏掉的中转组合。</p>
+        <div className="original-sky" aria-hidden="true">
+          <div className="cloud cloud-one"><SketchCloud width={270} /></div>
+          <div className="cloud cloud-two"><SketchCloud width={190} /></div>
+          <BigPlane />
+        </div>
+        <div className="hero-copy-block">
+          <p className="eyebrow">MULTI-CITY ROUTE FINDER</p>
+          <h1>Make the journey<br />part of the adventure.</h1>
+          <p className="hero-copy">把跨太平洋行程拆成两段，找到常规搜索容易漏掉的中转组合。</p>
+        </div>
 
         <div className="search-card" aria-label="航线搜索">
           <div className="field-grid">
