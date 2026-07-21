@@ -94,11 +94,18 @@ button:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid
 .allocation-price { background: linear-gradient(90deg, #3a7ea8, #63a6c8); }
 .allocation-interest { background: linear-gradient(90deg, #dfa15c, #edbd7b); }
 .allocation-directness { background: linear-gradient(90deg, #6b947e, #8ab19b); }
-.allocation-handle { position: absolute; z-index: 2; top: 50%; width: 22px; height: 22px; min-height: 0; margin: 0; padding: 0; background: white; border: 2px solid var(--blue-dark); border-radius: 50%; box-shadow: 0 3px 12px rgba(30, 61, 90, 0.28); cursor: grab; touch-action: none; transform: translate(-50%, -50%); transition: left 80ms linear, transform 140ms var(--spring), box-shadow 140ms ease; }
+.allocation-handle { position: absolute; z-index: 2; top: 50%; width: 22px; height: 22px; min-height: 0; margin: 0; padding: 0; background: white; border: 2px solid var(--blue-dark); border-radius: 50%; box-shadow: 0 3px 12px rgba(30, 61, 90, 0.28); cursor: grab; touch-action: none; transform: translate(-50%, -50%); transition: left 80ms linear, width 180ms var(--spring), border-radius 180ms var(--spring), transform 180ms var(--spring), box-shadow 140ms ease; }
 .allocation-handle:hover { transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 5px 15px rgba(30, 61, 90, 0.34); }
 .allocation-handle:active { transform: translate(-50%, -50%) scale(1.15); cursor: grabbing; }
 .allocation-handle:focus-visible { outline-offset: 4px; }
 .interest-directness-handle { border-color: #557965; }
+.allocation-handle.colliding { width: 20px; }
+.price-interest-handle.colliding { z-index: 3; border-radius: 999px 5px 5px 999px; transform: translate(-100%, -50%); }
+.interest-directness-handle.colliding { z-index: 3; border-radius: 5px 999px 999px 5px; transform: translate(0, -50%); }
+.price-interest-handle.colliding:hover { transform: translate(-100%, -50%) scale(1.08); }
+.interest-directness-handle.colliding:hover { transform: translate(0, -50%) scale(1.08); }
+.price-interest-handle.colliding:active { transform: translate(-100%, -50%) scale(1.12); }
+.interest-directness-handle.colliding:active { transform: translate(0, -50%) scale(1.12); }
 .allocation-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .allocation-legend span { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--ink); font-size: 12px; font-weight: 680; }
 .allocation-legend span:nth-child(2) { justify-content: center; }

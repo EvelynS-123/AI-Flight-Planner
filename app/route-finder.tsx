@@ -106,6 +106,7 @@ export default function RouteFinder() {
     for (const route of results) counts[route.ticketType] += 1;
     return `直飞 ${counts.direct} 条，联程 ${counts.connection} 条，Multicity ${counts["multi-city"]} 条`;
   }, [results]);
+  const handlesAreColliding = weights.interest <= 4;
 
   useLayoutEffect(() => {
     const nextPositions = new Map<string, number>();
@@ -285,7 +286,7 @@ export default function RouteFinder() {
                     <span className="allocation-directness" style={{ width: `${weights.directness}%` }} />
                   </div>
                   <button
-                    className="allocation-handle price-interest-handle"
+                    className={`allocation-handle price-interest-handle ${handlesAreColliding ? "colliding" : ""}`}
                     type="button"
                     role="slider"
                     aria-label="最便宜与最有趣的分界"
@@ -297,7 +298,7 @@ export default function RouteFinder() {
                     onKeyDown={(event) => moveBoundaryFromKeyboard("price-interest", event)}
                   />
                   <button
-                    className="allocation-handle interest-directness-handle"
+                    className={`allocation-handle interest-directness-handle ${handlesAreColliding ? "colliding" : ""}`}
                     type="button"
                     role="slider"
                     aria-label="最有趣与最直接的分界"
