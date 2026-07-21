@@ -1,4 +1,4 @@
-export type AirportCode = "PVG" | "PEK" | "HKG" | "TPE" | "ICN" | "KIX" | "LAX" | "SFO" | "SEA" | "YVR";
+export type AirportCode = "PVG" | "PEK" | "HKG" | "TPE" | "ICN" | "KIX" | "NRT" | "LAX" | "SFO" | "SEA" | "YVR";
 
 export type Segment = {
   from: string;
@@ -15,11 +15,30 @@ export type RouteOption = {
   id: string;
   origin: AirportCode;
   destination: AirportCode;
-  hub: "NRT" | "ICN" | "TPE" | "HNL";
+  hubs: string[];
+  ticketType: "direct" | "connection" | "multi-city";
+  stopCount: number;
   months: Array<"Aug" | "Sep">;
-  segments: [Segment, Segment];
+  segments: Segment[];
   total: number;
 };
+
+export type RouteWeights = {
+  price: number;
+  interest: number;
+  directness: number;
+};
+
+export function rebalanceWeights(current: RouteWeights, key: keyof RouteWeights, value: number): RouteWeights {
+  const nextValue = Math.max(0, Math.min(100, Math.round(value)));
+  const otherKeys = (Object.keys(current) as Array<keyof RouteWeights>).filter((item) => item !== key);
+  const remaining = 100 - nextValue;
+  const currentOtherTotal = current[otherKeys[0]] + current[otherKeys[1]];
+  const first = currentOtherTotal === 0
+    ? Math.round(remaining / 2)
+    : Math.round(remaining * current[otherKeys[0]] / currentOtherTotal);
+  return { ...current, [key]: nextValue, [otherKeys[0]]: first, [otherKeys[1]]: remaining - first };
+}
 
 export const AIRPORTS: Record<string, { city: string; country: string }> = {
   PVG: { city: "上海", country: "中国" },
@@ -66,14 +85,16 @@ const SOURCES = {
   hnlSea: { price: 193, date: "2026-09-10", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/hnl/sea/honolulu-to-seattle", stops: 0 },
 } as const;
 
-function option(id: string, origin: AirportCode, hub: RouteOption["hub"], destination: AirportCode, first: keyof typeof SOURCES, second: keyof typeof SOURCES): RouteOption {
+function option(id: string, origin: AirportCode, hub: string, destination: AirportCode, first: keyof typeof SOURCES, second: keyof typeof SOURCES): RouteOption {
   const a = SOURCES[first];
   const b = SOURCES[second];
   return {
     id,
     origin,
     destination,
-    hub,
+    hubs: [hub],
+    ticketType: "multi-city",
+    stopCount: 1,
     months: ["Aug", "Sep"],
     segments: [
       { from: origin, to: hub, ...a },
@@ -83,7 +104,7 @@ function option(id: string, origin: AirportCode, hub: RouteOption["hub"], destin
   };
 }
 
-export const ROUTES: RouteOption[] = [
+const SEED_ROUTES: RouteOption[] = [
   option("pvg-nrt-lax", "PVG", "NRT", "LAX", "pvgNrt", "nrtLax"),
   option("pvg-icn-lax", "PVG", "ICN", "LAX", "pvgIcn", "icnLax"),
   option("pvg-tpe-lax", "PVG", "TPE", "LAX", "pvgTpe", "tpeLax"),
@@ -121,19 +142,120 @@ export const ROUTES: RouteOption[] = [
   option("kix-hnl-sea", "KIX", "HNL", "SEA", "kixHnl", "hnlSea"),
 ];
 
-export function scoreRoutes(routes: RouteOption[]) {
+const DIRECT_SEGMENTS: Segment[] = [
+  { from: "PVG", to: "LAX", price: 612, date: "2026-09-16", airline: "United · source fare HK$4,775", source: "Trip.com", url: "https://www.trip.com/flights/airport-pvg-lax/", stops: 0 },
+  { from: "NRT", to: "LAX", price: 262, date: "2026-09-09", airline: "ZIPAIR", source: "Google Flights", url: "https://www.google.com/travel/flights/flights-from-tokyo-to-los-angeles.html", stops: 0 },
+  { from: "HKG", to: "LAX", price: 418, date: "2026-09 snapshot", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/hkg/lax/hong-kong-to-los-angeles", stops: 0 },
+  { from: "ICN", to: "LAX", price: 397, date: "2026-09 snapshot", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/icn/lax/seoul-to-los-angeles", stops: 0 },
+  { from: "ICN", to: "SFO", price: 395, date: "2026-09-25", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/sel/sfo/seoul-to-san-francisco", stops: 0 },
+  { from: "ICN", to: "YVR", price: 398, date: "2026-09 snapshot", airline: "Route fare", source: "AirHint", url: "https://deals.airhint.com/cheapest-deals/one-way/ICN/YVR", stops: 0 },
+  { from: "TPE", to: "LAX", price: 512, date: "2026-09-06", airline: "STARLUX", source: "Trip.com", url: "https://www.trip.com/flights/airport-tpe-lax/", stops: 0 },
+  { from: "TPE", to: "SFO", price: 444, date: "2026-08/09 snapshot", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/tpe/sfo/taipei-to-san-francisco", stops: 0 },
+  { from: "TPE", to: "SEA", price: 406, date: "2026-09-11", airline: "Delta", source: "Trip.com", url: "https://www.trip.com/flights/airport-tpe-sea/", stops: 0 },
+  { from: "KIX", to: "LAX", price: 586, date: "2026-08/09 snapshot", airline: "Route fare", source: "Expedia", url: "https://www.expedia.com/lp/flights/kix/lax/osaka-to-los-angeles", stops: 0 },
+  { from: "HKG", to: "SEA", price: 926.52, date: "2026-08-11", airline: "Cathay Pacific", source: "Traveloka", url: "https://www.traveloka.com/en-en/flight/route/Hong-Kong-Seattle.HKG.SEA", stops: 0 },
+];
+
+function itinerary(
+  id: string,
+  origin: AirportCode,
+  destination: AirportCode,
+  price: number,
+  date: string,
+  airline: string,
+  source: string,
+  url: string,
+  hubs: string[] = [],
+): RouteOption {
+  return {
+    id,
+    origin,
+    destination,
+    hubs,
+    ticketType: "connection",
+    stopCount: Math.max(1, hubs.length),
+    months: [date.includes("08-") ? "Aug" : "Sep"],
+    segments: [{ from: origin, to: destination, price, date, airline, source, url, stops: Math.max(1, hubs.length) }],
+    total: price,
+  };
+}
+
+// These are end-to-end, single-search itinerary observations. A displayed hub is
+// included only when the source exposed it; otherwise the UI says "1 次中转".
+const CONNECTION_ROUTES: RouteOption[] = [
+  itinerary("pvg-lax-connection-cz", "PVG", "LAX", 506, "2026-08-28", "China Southern · source fare HK$3,943", "Trip.com", "https://www.trip.com/flights/airport-pvg-lax/"),
+  itinerary("pvg-lax-connection-sep", "PVG", "LAX", 457, "2026-09 route snapshot", "1-stop route fare · source fare HK$3,564", "Trip.com", "https://www.trip.com/flights/airport-pvg-lax/"),
+  itinerary("hkg-lax-connection-airpremia", "HKG", "LAX", 435, "2026-08-26", "Air Premia", "Trip.com", "https://www.trip.com/flights/airport-hkg-lax/"),
+  itinerary("tpe-lax-connection-pal", "TPE", "LAX", 456, "2026-08-26", "Philippine Airlines", "Google Flights", "https://www.google.com/travel/flights/flights-from-taipei-city-to-los-angeles.html?gl=US&hl=en-US"),
+  itinerary("pvg-sfo-connection-cz", "PVG", "SFO", 482, "2026-08-27", "China Southern", "Trip.com", "https://www.trip.com/flights/airport-pvg-sfo/"),
+  itinerary("pek-yvr-connection", "PEK", "YVR", 465, "2026-09-15", "1-stop itinerary", "Momondo", "https://www.momondo.com/flights/beijing-capital-international-airport-pek/vancouver-intl-airport-yvr"),
+  itinerary("hkg-yvr-connection-ke", "HKG", "YVR", 451, "2026-09-30", "Korean Air", "Google Flights", "https://www.google.com/travel/flights/flights-from-hong-kong-to-vancouver.html"),
+  itinerary("pvg-sea-connection-spring", "PVG", "SEA", 412, "2026-09-15", "Spring Airlines", "Skyscanner", "https://www.skyscanner.com/routes/pvg/sea/shanghai-pudong-to-seattle-tacoma-international.html"),
+  itinerary("tpe-yvr-connection-lion", "TPE", "YVR", 406, "2026-08-26", "Thai Lion Air", "Trip.com", "https://www.trip.com/flights/airport-tpe-city-yvr/"),
+  itinerary("kix-lax-connection-peach", "KIX", "LAX", 442, "2026-08-08", "Peach Aviation", "Trip.com", "https://www.trip.com/flights/airport-kix-lax/"),
+  itinerary("hkg-sea-connection", "HKG", "SEA", 570, "2026-08-31", "1-stop itinerary", "HolidayPrice", "https://holidayprice.com/flights/hongkong-hkg/seattle-sea/"),
+];
+
+const uniqueSegments = new Map<string, Segment>();
+for (const segment of [...SEED_ROUTES.flatMap((route) => route.segments), ...DIRECT_SEGMENTS]) {
+  const key = `${segment.from}-${segment.to}`;
+  const current = uniqueSegments.get(key);
+  if (!current || segment.price < current.price) uniqueSegments.set(key, segment);
+}
+
+export const SEGMENTS = [...uniqueSegments.values()];
+
+function buildRoutes() {
+  const origins: AirportCode[] = ["PVG", "PEK", "HKG", "TPE", "ICN", "KIX", "NRT"];
+  const destinations: AirportCode[] = ["LAX", "SFO", "SEA", "YVR"];
+  const routes: RouteOption[] = [];
+
+  function walk(origin: AirportCode, destination: AirportCode, airport: string, path: Segment[], visited: Set<string>) {
+    if (path.length >= 3) return;
+    for (const segment of SEGMENTS.filter((item) => item.from === airport)) {
+      if (visited.has(segment.to)) continue;
+      const nextPath = [...path, segment];
+      if (segment.to === destination) {
+        routes.push({
+          id: `graph-${nextPath.map((item) => item.from).concat(destination).join("-").toLowerCase()}`,
+          origin,
+          destination,
+          hubs: nextPath.slice(0, -1).map((item) => item.to),
+          ticketType: nextPath.length === 1 ? "direct" : "multi-city",
+          stopCount: nextPath.length === 1 ? nextPath[0].stops : nextPath.length - 1 + nextPath.reduce((sum, item) => sum + item.stops, 0),
+          months: ["Aug", "Sep"],
+          segments: nextPath,
+          total: Number(nextPath.reduce((sum, item) => sum + item.price, 0).toFixed(2)),
+        });
+      } else if (!destinations.includes(segment.to as AirportCode)) {
+        walk(origin, destination, segment.to, nextPath, new Set([...visited, segment.to]));
+      }
+    }
+  }
+
+  for (const origin of origins) {
+    for (const destination of destinations) walk(origin, destination, origin, [], new Set([origin]));
+  }
+  return routes;
+}
+
+export const ROUTES: RouteOption[] = [...buildRoutes(), ...CONNECTION_ROUTES];
+
+const HUB_INTEREST: Record<string, number> = { HNL: 98, NRT: 88, TPE: 84, ICN: 82 };
+
+export function scoreRoutes(routes: RouteOption[], weights: RouteWeights = { price: 30, interest: 35, directness: 35 }) {
   if (!routes.length) return [];
   const prices = routes.map((route) => route.total);
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   return routes.map((route) => {
     const price = max === min ? 100 : ((max - route.total) / (max - min)) * 100;
-    const extraStops = route.segments.reduce((sum, segment) => sum + segment.stops, 0);
-    const normalizedStops = Math.max(0, 100 - extraStops * 35);
-    const convenience = 50;
-    const directness = 0.4 * normalizedStops + 0.4 * 50 + 0.2 * convenience;
-    const experience = 50;
-    const balanced = 0.3 * price + 0.35 * directness + 0.35 * experience;
-    return { ...route, scores: { price, directness, experience, balanced } };
+    const directness = Math.max(0, 100 - route.stopCount * 20 - (route.ticketType === "multi-city" ? 10 : 0));
+    const hubBase = route.hubs.length
+      ? route.hubs.reduce((sum, hub) => sum + (HUB_INTEREST[hub] ?? 70), 0) / route.hubs.length
+      : route.ticketType === "direct" ? 48 : 65;
+    const interest = Math.min(100, hubBase + Math.max(0, route.hubs.length - 1) * 6);
+    const total = (price * weights.price + interest * weights.interest + directness * weights.directness) / 100;
+    return { ...route, scores: { price, interest, directness, total } };
   });
 }
