@@ -49,6 +49,16 @@ export type Copy = {
   directWarning: string;
   connectionWarning: string;
   multiCityWarning: string;
+  totalDuration: string;
+  stopoverPlan: string;
+  connectionTime: string;
+  usableTime: string;
+  playDays: string;
+  daysOption: (days: number) => string;
+  fixedConnection: string;
+  ticket: string;
+  weeklySchedule: string;
+  operates: string;
   priceDate: string;
   oneWay: string;
   view: string;
@@ -65,6 +75,16 @@ export type Copy = {
 
 export const COPY: Record<Locale, Copy> = {
   zh: {
+    totalDuration: "全程时间",
+    stopoverPlan: "中转地停留",
+    connectionTime: "中转时间",
+    usableTime: "预计可游玩",
+    playDays: "在中转地玩几天",
+    daysOption: (days) => days === 0 ? "当天继续" : `${days} 天`,
+    fixedConnection: "固定联程",
+    ticket: "机票",
+    weeklySchedule: "每周参考时刻",
+    operates: "运行日",
     language: "语言",
     home: "Via 首页",
     demoBadge: "2026 夏季样本",
@@ -120,6 +140,16 @@ export const COPY: Record<Locale, Copy> = {
     sourceFare: "原始报价",
   },
   en: {
+    totalDuration: "Total journey",
+    stopoverPlan: "Stopover stay",
+    connectionTime: "Connection time",
+    usableTime: "Estimated sightseeing",
+    playDays: "Days to explore",
+    daysOption: (days) => days === 0 ? "Continue the same day" : `${days} ${days === 1 ? "day" : "days"}`,
+    fixedConnection: "Fixed connection",
+    ticket: "Ticket",
+    weeklySchedule: "Weekly timetable",
+    operates: "Operates",
     language: "Language",
     home: "Via home",
     demoBadge: "Summer 2026 sample",
@@ -175,6 +205,16 @@ export const COPY: Record<Locale, Copy> = {
     sourceFare: "source fare",
   },
   ko: {
+    totalDuration: "총 여행 시간",
+    stopoverPlan: "스톱오버 체류",
+    connectionTime: "환승 시간",
+    usableTime: "예상 관광 시간",
+    playDays: "경유지 체류 일수",
+    daysOption: (days) => days === 0 ? "당일 계속 이동" : `${days}일`,
+    fixedConnection: "고정 환승",
+    ticket: "항공권",
+    weeklySchedule: "주간 참고 시간표",
+    operates: "운항일",
     language: "언어",
     home: "Via 홈",
     demoBadge: "2026년 여름 샘플",
@@ -230,6 +270,16 @@ export const COPY: Record<Locale, Copy> = {
     sourceFare: "원문 운임",
   },
   ja: {
+    totalDuration: "総移動時間",
+    stopoverPlan: "ストップオーバー滞在",
+    connectionTime: "乗り継ぎ時間",
+    usableTime: "観光可能時間の目安",
+    playDays: "経由地で過ごす日数",
+    daysOption: (days) => days === 0 ? "当日中に出発" : `${days}日`,
+    fixedConnection: "固定乗り継ぎ",
+    ticket: "航空券",
+    weeklySchedule: "週間参考時刻表",
+    operates: "運航日",
     language: "言語",
     home: "Via ホーム",
     demoBadge: "2026年夏のサンプル",
