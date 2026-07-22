@@ -3,7 +3,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import NumberFlow, { continuous } from "@number-flow/react";
 import { DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
-import { COPY, LOCALE_OPTIONS, airportCity, localizeAirlineLabel, localizeDateLabel, type Copy, type Locale } from "./i18n";
+import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./flight-schedules";
+import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
 
 const SCORE_NUMBER_PLUGINS = [continuous];
 
@@ -81,6 +82,30 @@ function ticketCopy(route: RouteOption, copy: Copy) {
   return { label: copy.multiCity, detail: copy.multiCityDetail(route.segments.length) };
 }
 
+const DURATION_UNITS: Record<Locale, { day: string; hour: string; minute: string }> = {
+  zh: { day: "天", hour: "小时", minute: "分钟" },
+  en: { day: "d", hour: "h", minute: "m" },
+  ko: { day: "일", hour: "시간", minute: "분" },
+  ja: { day: "日", hour: "時間", minute: "分" },
+};
+
+function localizeDuration(minutes: number, locale: Locale) {
+  const value = durationLabel(minutes);
+  const units = DURATION_UNITS[locale];
+  const parts = [];
+  if (value.days) parts.push(`${value.days}${units.day}`);
+  if (value.hours) parts.push(`${value.hours}${units.hour}`);
+  if (value.minutes || !parts.length) parts.push(`${value.minutes}${units.minute}`);
+  return parts.join(" ");
+}
+
+function localizeWeekdays(days: readonly number[], locale: Locale) {
+  const intl = LOCALE_OPTIONS.find((item) => item.code === locale)!.intl;
+  return operatingDayNumbers(days as Array<0 | 1 | 2 | 3 | 4 | 5 | 6>)
+    .map((day) => new Intl.DateTimeFormat(intl, { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 7, 2 + day))))
+    .join(locale === "en" ? ", " : "、");
+}
+
 export default function RouteFinder() {
   const [locale, setLocale] = useState<Locale>("zh");
   const [origin, setOrigin] = useState<AirportCode>("PVG");
@@ -89,6 +114,7 @@ export default function RouteFinder() {
   const [draftDestination, setDraftDestination] = useState<AirportCode>("LAX");
   const [month, setMonth] = useState<"Aug" | "Sep">("Sep");
   const [weights, setWeights] = useState<RouteWeights>({ price: 30, interest: 35, directness: 35 });
+  const [stopoverSelections, setStopoverSelections] = useState<StopoverSelections>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [searched, setSearched] = useState(true);
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
@@ -101,8 +127,8 @@ export default function RouteFinder() {
 
   const results = useMemo(() => {
     const matched = ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
-    return scoreRoutes(matched, weights).sort((a, b) => b.scores.total - a.scores.total || a.total - b.total);
-  }, [origin, destination, month, weights]);
+    return scoreRoutes(matched, weights, stopoverSelections).sort((a, b) => b.scores.total - a.scores.total || a.total - b.total);
+  }, [origin, destination, month, weights, stopoverSelections]);
 
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
@@ -202,6 +228,14 @@ export default function RouteFinder() {
     updateBoundary(boundary, next);
   }
 
+  function updateStopoverDays(routeId: string, stopIndex: number, days: number) {
+    setStopoverSelections((current) => {
+      const next = [...(current[routeId] ?? [])];
+      next[stopIndex] = days;
+      return { ...current, [routeId]: next };
+    });
+  }
+
   function search() {
     setOrigin(draftOrigin);
     setDestination(draftDestination);
@@ -253,20 +287,20 @@ export default function RouteFinder() {
           <div className="field-grid">
             <label className="select-field">
               <span>{copy.from}</span>
-              <select value={draftOrigin} onChange={(event) => setDraftOrigin(event.target.value as AirportCode)}>
+              <select aria-label={copy.from} value={draftOrigin} onChange={(event) => setDraftOrigin(event.target.value as AirportCode)}>
                 {ORIGINS.map((code) => <option key={code} value={code}>{code} · {airportCity(code, locale)}</option>)}
               </select>
             </label>
             <button className="swap-button" type="button" onClick={swap} aria-label={copy.swap} disabled>↔</button>
             <label className="select-field">
               <span>{copy.to}</span>
-              <select value={draftDestination} onChange={(event) => setDraftDestination(event.target.value as AirportCode)}>
+              <select aria-label={copy.to} value={draftDestination} onChange={(event) => setDraftDestination(event.target.value as AirportCode)}>
                 {DESTINATIONS.map((code) => <option key={code} value={code}>{code} · {airportCity(code, locale)}</option>)}
               </select>
             </label>
             <label className="select-field month-field">
               <span>{copy.month}</span>
-              <select value={month} onChange={(event) => setMonth(event.target.value as "Aug" | "Sep")}>
+              <select aria-label={copy.month} value={month} onChange={(event) => setMonth(event.target.value as "Aug" | "Sep")}>
                 <option value="Aug">{copy.august}</option>
                 <option value="Sep">{copy.september}</option>
               </select>
@@ -370,6 +404,7 @@ export default function RouteFinder() {
                           <span className={`ticket-pill ${route.ticketType}`}>{ticket.label}</span>
                           <span>{ticket.detail}</span>
                           {route.hubs.length > 0 && <span>{copy.via} {route.hubs.map((hub) => airportCity(hub, locale)).join(locale === "en" ? ", " : "、")}</span>}
+                          <span>{copy.totalDuration} {localizeDuration(route.totalDurationMinutes, locale)}</span>
                         </div>
                       </div>
                       <div className="score-block">
@@ -401,20 +436,83 @@ export default function RouteFinder() {
                           {route.ticketType === "connection" && <p>{copy.connectionWarning}</p>}
                           {route.ticketType === "direct" && <p>{copy.directWarning}</p>}
                         </div>
-                        <div className="segments">
-                          {route.segments.map((segment, segmentIndex) => (
-                            <div className="segment" key={`${segment.from}-${segment.to}`}>
-                              <div className="segment-number">{segmentIndex + 1}</div>
-                              <div className="segment-route"><strong>{segment.from} → {segment.to}</strong><span>{localizeAirlineLabel(segment.airline, locale)}</span></div>
-                              <div className="segment-date"><span>{copy.priceDate}</span><strong>{localizeDateLabel(segment.date, locale)}</strong></div>
-                              <div className="segment-price"><strong>${segment.price.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })}</strong><span>{copy.oneWay}</span></div>
-                              <a href={segment.url} target="_blank" rel="noreferrer">{copy.view} {segment.source} ↗</a>
-                            </div>
+                        {route.scheduledStops.length > 0 && (
+                          <div className="stopover-plans">
+                            {route.scheduledStops.map((stop, stopIndex) => {
+                              const multiIndex = route.scheduledStops.slice(0, stopIndex).filter((item) => item.kind === "multi-city").length;
+                              return (
+                                <div className={`stopover-plan ${stop.kind}`} key={`${stop.airport}-${stopIndex}`}>
+                                  <div className="stopover-copy">
+                                    <span>{stop.kind === "multi-city" ? copy.stopoverPlan : copy.connectionTime}</span>
+                                    <strong>{airportCity(stop.airport, locale)} · {localizeDuration(stop.durationMinutes, locale)}</strong>
+                                    <small>{copy.usableTime} {localizeDuration(stop.usableMinutes, locale)}</small>
+                                  </div>
+                                  {stop.kind === "multi-city" ? (
+                                    <label className="stay-selector">
+                                      <span>{copy.playDays}</span>
+                                      <select
+                                        aria-label={`${copy.playDays} · ${airportCity(stop.airport, locale)}`}
+                                        value={route.selectedStopoverDays[multiIndex] ?? stop.playDays}
+                                        onChange={(event) => updateStopoverDays(route.id, multiIndex, Number(event.target.value))}
+                                      >
+                                        {stop.options.map((days) => <option key={days} value={days}>{copy.daysOption(days)}</option>)}
+                                      </select>
+                                    </label>
+                                  ) : (
+                                    <span className="fixed-connection">{copy.fixedConnection}</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="flight-tickets">
+                          {route.scheduledTickets.map((ticketItem) => (
+                            <section className="flight-ticket" key={ticketItem.ticketIndex}>
+                              <div className="ticket-heading">
+                                <strong>{copy.ticket} {ticketItem.ticketIndex + 1}</strong>
+                                <span>${ticketItem.price.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })} · {localizeDateLabel(ticketItem.fareDate, locale)}</span>
+                                <a href={ticketItem.fareUrl} target="_blank" rel="noreferrer">{copy.view} {ticketItem.fareSource} ↗</a>
+                              </div>
+                              <div className="flights">
+                                {ticketItem.flights.map((flight, flightIndex) => (
+                                  <div className="flight-row" key={`${flight.id}-${flight.departureUtc}`}>
+                                    <div className="flight-index">{ticketItem.ticketIndex + 1}.{flightIndex + 1}</div>
+                                    <div className="airline-brand">
+                                      <img src={flight.logoUrl} alt={`${flight.airlineName} logo`} width="48" height="32" />
+                                      <span><strong>{flight.airlineName}</strong><small>{flight.flightNumber}</small></span>
+                                    </div>
+                                    <div className="flight-timeline">
+                                      <div className="time-point">
+                                        <strong>{flight.departureTime}</strong>
+                                        <span>{flight.from} · {localizeDateLabel(flight.departureDate, locale)}</span>
+                                      </div>
+                                      <div className="air-time"><span>→</span><small>{localizeDuration(flight.durationMinutes, locale)}</small></div>
+                                      <div className="time-point arrival">
+                                        <strong>{flight.arrivalTime}{flight.arrivalDayOffset > 0 ? ` +${flight.arrivalDayOffset}` : ""}</strong>
+                                        <span>{flight.to} · {localizeDateLabel(flight.arrivalDate, locale)}</span>
+                                      </div>
+                                    </div>
+                                    <div className="schedule-reference">
+                                      <a href={flight.scheduleSource} target="_blank" rel="noreferrer">{copy.weeklySchedule} ↗</a>
+                                      <small>{copy.operates} {localizeWeekdays(flight.operatingDays, locale)}</small>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </section>
                           ))}
                         </div>
                         <div className="score-note">
                           <strong>{copy.whyHere}</strong>
-                          <p>{copy.scoreNote(weights.price, weights.interest, weights.directness)}</p>
+                          <div>
+                            <p>{copy.scoreNote(weights.price, weights.interest, weights.directness)}</p>
+                            <div className="score-breakdown">
+                              <span>{copy.cheapest}<strong>{Math.round(route.scores.price)}</strong></span>
+                              <span>{copy.interesting}<strong>{Math.round(route.scores.interest)}</strong></span>
+                              <span>{copy.directest}<strong>{Math.round(route.scores.directness)}</strong></span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
