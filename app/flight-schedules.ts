@@ -414,11 +414,9 @@ function stopScore(stops: number) {
 function usableTimeScore(minutes: number) {
   const hours = minutes / 60;
   if (hours < 2) return 0;
-  if (hours < 4) return 30;
-  if (hours < 8) return 70;
-  if (hours < 16) return 90;
-  if (hours <= 36) return 100;
-  return 85;
+  // A monotonic sigmoid keeps short stopovers modest while approaching the
+  // practical sightseeing ceiling after roughly two to three days.
+  return 100 / (1 + Math.exp(-0.08 * (hours - 12)));
 }
 
 function airportAccessScore(airport: string) {
