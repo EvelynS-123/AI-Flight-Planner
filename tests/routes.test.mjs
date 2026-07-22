@@ -106,15 +106,28 @@ test("multi-city stay choices only expose dates served by the onward flight", ()
   }
 });
 
-test("stopover stay changes the timetable and Algorithm PDF experience score", () => {
+test("longer stopover stays raise experience toward a ceiling while lowering directness", () => {
   const route = ROUTES.find((item) => item.id === "graph-pvg-hnl-lax");
   assert.ok(route);
-  const oneDay = scoreRoutes([route], { price: 0, interest: 100, directness: 0 }, { [route.id]: [1] })[0];
-  const fourDays = scoreRoutes([route], { price: 0, interest: 100, directness: 0 }, { [route.id]: [4] })[0];
+  const comparisonSet = ROUTES.filter((item) => item.origin === route.origin && item.destination === route.destination && item.months.includes("Sep"));
+  const oneDay = scoreRoutes(comparisonSet, { price: 0, interest: 100, directness: 0 }, { [route.id]: [1] }).find((item) => item.id === route.id);
+  const fourDays = scoreRoutes(comparisonSet, { price: 0, interest: 100, directness: 0 }, { [route.id]: [4] }).find((item) => item.id === route.id);
+  assert.ok(oneDay && fourDays);
   assert.notEqual(oneDay.scheduledTickets[1].flights[0].departureDate, fourDays.scheduledTickets[1].flights[0].departureDate);
-  assert.notEqual(oneDay.scores.interest, fourDays.scores.interest);
+  assert.ok(fourDays.scores.interest > oneDay.scores.interest);
+  assert.ok(fourDays.scores.directness < oneDay.scores.directness);
   assert.equal(oneDay.scores.total, oneDay.scores.interest);
   assert.equal(fourDays.scores.total, fourDays.scores.interest);
+});
+
+test("sigmoid stopover experience approaches its ceiling by two to three days", () => {
+  const route = ROUTES.find((item) => item.id === "graph-pvg-nrt-lax");
+  assert.ok(route);
+  const values = [2, 3, 5, 7].map((days) => scoreRoutes([route], { price: 0, interest: 100, directness: 0 }, { [route.id]: [days] })[0].scores.usableTime);
+  assert.ok(values.every((value, index) => index === 0 || value >= values[index - 1]));
+  assert.ok(values[1] > values[0]);
+  assert.ok(values[1] > 98);
+  assert.ok(values[values.length - 1] <= 100);
 });
 
 test("component and final scores follow the Ranking Algorithm PDF formulas", () => {
