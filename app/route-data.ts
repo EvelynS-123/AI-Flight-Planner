@@ -1,3 +1,5 @@
+import { scoreScheduledRoutes, type StopoverSelections } from "./flight-schedules.ts";
+
 export type AirportCode = "PVG" | "PEK" | "HKG" | "TPE" | "ICN" | "KIX" | "NRT" | "LAX" | "SFO" | "SEA" | "YVR";
 
 export type Segment = {
@@ -297,21 +299,10 @@ function buildRoutes() {
 
 export const ROUTES: RouteOption[] = [...buildRoutes(), ...DIRECT_ROUTES, ...CONNECTION_ROUTES];
 
-const HUB_INTEREST: Record<string, number> = { HNL: 98, NRT: 88, HKG: 86, KIX: 86, TPE: 84, ICN: 82, YVR: 82, PEK: 80, MNL: 78, CAN: 76, WUH: 74 };
-
-export function scoreRoutes(routes: RouteOption[], weights: RouteWeights = { price: 30, interest: 35, directness: 35 }) {
-  if (!routes.length) return [];
-  const prices = routes.map((route) => route.total);
-  const min = Math.min(...prices);
-  const max = Math.max(...prices);
-  return routes.map((route) => {
-    const price = max === min ? 100 : ((max - route.total) / (max - min)) * 100;
-    const directness = Math.max(0, 100 - route.stopCount * 20 - (route.ticketType === "multi-city" ? 10 : 0));
-    const hubBase = route.hubs.length
-      ? route.hubs.reduce((sum, hub) => sum + (HUB_INTEREST[hub] ?? 70), 0) / route.hubs.length
-      : route.ticketType === "direct" ? 48 : 65;
-    const interest = Math.min(100, hubBase + Math.max(0, route.hubs.length - 1) * 6);
-    const total = (price * weights.price + interest * weights.interest + directness * weights.directness) / 100;
-    return { ...route, scores: { price, interest, directness, total } };
-  });
+export function scoreRoutes(
+  routes: RouteOption[],
+  weights: RouteWeights = { price: 30, interest: 35, directness: 35 },
+  selections: StopoverSelections = {},
+) {
+  return scoreScheduledRoutes(routes, weights, selections);
 }

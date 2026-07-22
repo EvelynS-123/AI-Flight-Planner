@@ -49,6 +49,16 @@ export type Copy = {
   directWarning: string;
   connectionWarning: string;
   multiCityWarning: string;
+  totalDuration: string;
+  stopoverPlan: string;
+  connectionTime: string;
+  usableTime: string;
+  playDays: string;
+  daysOption: (days: number) => string;
+  fixedConnection: string;
+  ticket: string;
+  weeklySchedule: string;
+  operates: string;
   priceDate: string;
   oneWay: string;
   view: string;
@@ -65,6 +75,16 @@ export type Copy = {
 
 export const COPY: Record<Locale, Copy> = {
   zh: {
+    totalDuration: "全程时间",
+    stopoverPlan: "中转地停留",
+    connectionTime: "中转时间",
+    usableTime: "预计可游玩",
+    playDays: "在中转地玩几天",
+    daysOption: (days) => days === 0 ? "当天继续" : `${days} 天`,
+    fixedConnection: "固定联程",
+    ticket: "机票",
+    weeklySchedule: "每周参考时刻",
+    operates: "运行日",
     language: "语言",
     home: "Via 首页",
     demoBadge: "2026 夏季样本",
@@ -110,7 +130,7 @@ export const COPY: Record<Locale, Copy> = {
     oneWay: "单程",
     view: "查看",
     whyHere: "为什么排在这里",
-    scoreNote: (price, interest, directness) => `当前分数由最便宜 ${price}%、最有趣 ${interest}%、最直接 ${directness}% 实时计算。最有趣分基于中转城市的 demo 体验值，直飞的趣味项采用中性值。`,
+    scoreNote: (price, interest, directness) => `当前分数由最便宜 ${price}%、最有趣 ${interest}%、最直接 ${directness}% 实时计算。可游玩时间按 S 曲线加分，约 2 至 3 天接近上限，更长的总行程仍会降低最直接分。`,
     footer: "仅用于路线探索演示。最终价格、航班时刻和入境要求请以航空公司或出票平台为准。",
     routeSummary: (total, direct, connection, multiCity) => `找到 ${total} 条，直飞 ${direct} 条，联程 ${connection} 条，Multicity ${multiCity} 条`,
     routeSnapshot: "航线快照",
@@ -120,6 +140,16 @@ export const COPY: Record<Locale, Copy> = {
     sourceFare: "原始报价",
   },
   en: {
+    totalDuration: "Total journey",
+    stopoverPlan: "Stopover stay",
+    connectionTime: "Connection time",
+    usableTime: "Estimated sightseeing",
+    playDays: "Days to explore",
+    daysOption: (days) => days === 0 ? "Continue the same day" : `${days} ${days === 1 ? "day" : "days"}`,
+    fixedConnection: "Fixed connection",
+    ticket: "Ticket",
+    weeklySchedule: "Weekly timetable",
+    operates: "Operates",
     language: "Language",
     home: "Via home",
     demoBadge: "Summer 2026 sample",
@@ -165,7 +195,7 @@ export const COPY: Record<Locale, Copy> = {
     oneWay: "One way",
     view: "View",
     whyHere: "Why it ranks here",
-    scoreNote: (price, interest, directness) => `The live score uses ${price}% cheapest, ${interest}% most interesting, and ${directness}% most direct. Interest is based on demo experience values for stopover cities; nonstop routes use a neutral value.`,
+    scoreNote: (price, interest, directness) => `The live score uses ${price}% cheapest, ${interest}% most interesting, and ${directness}% most direct. Usable stopover time follows a sigmoid curve that nears its ceiling around two to three days; longer trips still reduce directness.`,
     footer: "For route exploration only. Recheck final fares, schedules, and entry requirements with the airline or booking provider.",
     routeSummary: (total, direct, connection, multiCity) => `${total} routes · ${direct} nonstop, ${connection} connecting, ${multiCity} multi-city`,
     routeSnapshot: "route snapshot",
@@ -175,6 +205,16 @@ export const COPY: Record<Locale, Copy> = {
     sourceFare: "source fare",
   },
   ko: {
+    totalDuration: "총 여행 시간",
+    stopoverPlan: "스톱오버 체류",
+    connectionTime: "환승 시간",
+    usableTime: "예상 관광 시간",
+    playDays: "경유지 체류 일수",
+    daysOption: (days) => days === 0 ? "당일 계속 이동" : `${days}일`,
+    fixedConnection: "고정 환승",
+    ticket: "항공권",
+    weeklySchedule: "주간 참고 시간표",
+    operates: "운항일",
     language: "언어",
     home: "Via 홈",
     demoBadge: "2026년 여름 샘플",
@@ -220,7 +260,7 @@ export const COPY: Record<Locale, Copy> = {
     oneWay: "편도",
     view: "보기",
     whyHere: "이 순위인 이유",
-    scoreNote: (price, interest, directness) => `실시간 점수는 최저가 ${price}%, 흥미도 ${interest}%, 직행성 ${directness}%로 계산됩니다. 흥미도는 경유 도시의 데모 체험값을 사용하며 직항은 중립값을 사용합니다.`,
+    scoreNote: (price, interest, directness) => `실시간 점수는 최저가 ${price}%, 흥미도 ${interest}%, 직행성 ${directness}%로 계산됩니다. 경유지에서 활용 가능한 시간은 S자 곡선으로 반영되어 약 2~3일에 상한에 가까워지며, 총 여정이 길수록 직행성 점수는 낮아집니다.`,
     footer: "노선 탐색용 데모입니다. 최종 운임, 운항 일정, 입국 요건은 항공사 또는 예약 사이트에서 다시 확인하세요.",
     routeSummary: (total, direct, connection, multiCity) => `총 ${total}개 · 직항 ${direct}개, 연결편 ${connection}개, 다구간 ${multiCity}개`,
     routeSnapshot: "노선 스냅샷",
@@ -230,6 +270,16 @@ export const COPY: Record<Locale, Copy> = {
     sourceFare: "원문 운임",
   },
   ja: {
+    totalDuration: "総移動時間",
+    stopoverPlan: "ストップオーバー滞在",
+    connectionTime: "乗り継ぎ時間",
+    usableTime: "観光可能時間の目安",
+    playDays: "経由地で過ごす日数",
+    daysOption: (days) => days === 0 ? "当日中に出発" : `${days}日`,
+    fixedConnection: "固定乗り継ぎ",
+    ticket: "航空券",
+    weeklySchedule: "週間参考時刻表",
+    operates: "運航日",
     language: "言語",
     home: "Via ホーム",
     demoBadge: "2026年夏のサンプル",
@@ -275,7 +325,7 @@ export const COPY: Record<Locale, Copy> = {
     oneWay: "片道",
     view: "確認",
     whyHere: "この順位の理由",
-    scoreNote: (price, interest, directness) => `リアルタイム評価は、最安 ${price}%、面白さ ${interest}%、直行性 ${directness}%で計算します。面白さは経由都市のデモ体験値に基づき、直行便には中立値を使用します。`,
+    scoreNote: (price, interest, directness) => `リアルタイム評価は、最安 ${price}%、面白さ ${interest}%、直行性 ${directness}%で計算します。乗継地で使える時間はS字カーブで加点され、約2〜3日で上限に近づきます。一方、総旅程が長いほど直行性は下がります。`,
     footer: "ルート探索用のデモです。最終運賃、運航予定、入国要件は航空会社または予約サイトで再確認してください。",
     routeSummary: (total, direct, connection, multiCity) => `${total}件 · 直行便 ${direct}件、乗継便 ${connection}件、周遊 ${multiCity}件`,
     routeSnapshot: "ルートスナップショット",
