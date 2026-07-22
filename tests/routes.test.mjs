@@ -67,3 +67,83 @@ test("changing weights changes the winner according to the selected priority", (
   assert.equal(cheapest.total, Math.min(...routes.map((route) => route.total)));
   assert.equal(mostDirect.ticketType, "direct");
 });
+
+test("every demo itinerary has complete weekly timetable metadata", () => {
+  const scored = scoreRoutes(ROUTES);
+  assert.equal(scored.length, ROUTES.length);
+  for (const route of scored) {
+    assert.ok(route.totalDurationMinutes >= 0, `${route.id} has a negative total duration`);
+    assert.ok(route.scheduledTickets.length > 0, `${route.id} has no scheduled ticket`);
+    for (const stop of route.scheduledStops) assert.ok(stop.durationMinutes >= 0, `${route.id} has a negative layover`);
+    for (const flight of route.scheduledTickets.flatMap((ticket) => ticket.flights)) {
+      assert.ok(flight.airlineName.length > 0, `${route.id} is missing an airline`);
+      assert.match(flight.flightNumber, /^[A-Z0-9]{2,3}\d+$/);
+      assert.match(flight.logoUrl, /^https:\/\/images\.kiwi\.com\/airlines\/64\/[A-Z0-9]+\.png$/);
+      assert.match(flight.departureTime, /^\d{2}:\d{2}$/);
+      assert.match(flight.arrivalTime, /^\d{2}:\d{2}$/);
+      assert.ok(flight.arrivalUtc > flight.departureUtc);
+      const departureDay = new Date(`${flight.departureDate}T00:00:00Z`).getUTCDay();
+      assert.ok(flight.operatingDays.includes(departureDay), `${flight.flightNumber} departs outside its weekly schedule`);
+    }
+  }
+});
+
+test("multi-city stay choices only expose dates served by the onward flight", () => {
+  const route = ROUTES.find((item) => item.id === "graph-pvg-hnl-lax");
+  assert.ok(route);
+  const baseline = scoreRoutes([route])[0];
+  const stop = baseline.scheduledStops.find((item) => item.kind === "multi-city");
+  assert.ok(stop);
+  assert.ok(stop.options.length >= 3);
+  for (const days of stop.options) {
+    const result = scoreRoutes([route], { price: 30, interest: 35, directness: 35 }, { [route.id]: [days] })[0];
+    const selected = result.scheduledStops.find((item) => item.kind === "multi-city");
+    assert.equal(selected.playDays, days);
+    assert.ok(selected.durationMinutes >= 0);
+    const onward = result.scheduledTickets[1].flights[0];
+    const departureDay = new Date(`${onward.departureDate}T00:00:00Z`).getUTCDay();
+    assert.ok(onward.operatingDays.includes(departureDay));
+  }
+});
+
+test("longer stopover stays raise experience toward a ceiling while lowering directness", () => {
+  const route = ROUTES.find((item) => item.id === "graph-pvg-hnl-lax");
+  assert.ok(route);
+  const comparisonSet = ROUTES.filter((item) => item.origin === route.origin && item.destination === route.destination && item.months.includes("Sep"));
+  const oneDay = scoreRoutes(comparisonSet, { price: 0, interest: 100, directness: 0 }, { [route.id]: [1] }).find((item) => item.id === route.id);
+  const fourDays = scoreRoutes(comparisonSet, { price: 0, interest: 100, directness: 0 }, { [route.id]: [4] }).find((item) => item.id === route.id);
+  assert.ok(oneDay && fourDays);
+  assert.notEqual(oneDay.scheduledTickets[1].flights[0].departureDate, fourDays.scheduledTickets[1].flights[0].departureDate);
+  assert.ok(fourDays.scores.interest > oneDay.scores.interest);
+  assert.ok(fourDays.scores.directness < oneDay.scores.directness);
+  assert.equal(oneDay.scores.total, oneDay.scores.interest);
+  assert.equal(fourDays.scores.total, fourDays.scores.interest);
+});
+
+test("sigmoid stopover experience approaches its ceiling by two to three days", () => {
+  const route = ROUTES.find((item) => item.id === "graph-pvg-nrt-lax");
+  assert.ok(route);
+  const values = [2, 3, 5, 7].map((days) => scoreRoutes([route], { price: 0, interest: 100, directness: 0 }, { [route.id]: [days] })[0].scores.usableTime);
+  assert.ok(values.every((value, index) => index === 0 || value >= values[index - 1]));
+  assert.ok(values[1] > values[0]);
+  assert.ok(values[1] > 98);
+  assert.ok(values[values.length - 1] <= 100);
+});
+
+test("component and final scores follow the Ranking Algorithm PDF formulas", () => {
+  const routes = ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX" && route.months.includes("Sep"));
+  const weights = { price: 30, interest: 35, directness: 35 };
+  const scored = scoreRoutes(routes, weights);
+  assert.equal(Math.round(Math.max(...scored.map((route) => route.scores.price))), 100);
+  assert.equal(Math.round(Math.min(...scored.map((route) => route.scores.price))), 0);
+  for (const route of scored) {
+    const expectedDirectness = 0.4 * route.scores.stops + 0.4 * route.scores.duration + 0.2 * route.scores.convenience;
+    const expectedInterest = route.scheduledStops.length
+      ? 0.4 * route.scores.attractiveness + 0.3 * route.scores.usableTime + 0.2 * route.scores.airportAccess + 0.1 * route.scores.timeWindow
+      : 0;
+    const expectedTotal = (route.scores.price * weights.price + route.scores.interest * weights.interest + route.scores.directness * weights.directness) / 100;
+    assert.ok(Math.abs(route.scores.directness - expectedDirectness) < 1e-9);
+    assert.ok(Math.abs(route.scores.interest - expectedInterest) < 1e-9);
+    assert.ok(Math.abs(route.scores.total - expectedTotal) < 1e-9);
+  }
+});
