@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DEMO_DESTINATIONS, DEMO_ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes } from "../app/route-data.ts";
 import { AIRPORT_CITIES, COPY, LOCALE_OPTIONS } from "../app/i18n.ts";
+import {
+  DEFAULT_CITY_ATTRACTIVENESS,
+  FAVORITE_CITY_LIMIT,
+  QUIZ_CITY_CODES,
+  buildPersonalizedAttractiveness,
+  defaultTravelPreferences,
+  personalizedTravelPreferences,
+  sanitizeTravelPreferences,
+} from "../app/travel-preferences.ts";
 
 test("demo includes a broad set of all three ticket types", () => {
   assert.ok(ROUTES.length >= 90);
@@ -22,7 +31,62 @@ test("all four locales cover the complete interface and airport list", () => {
   for (const { code } of LOCALE_OPTIONS) {
     assert.ok(COPY[code].search.length > 0);
     assert.ok(COPY[code].footer.length > 0);
+    assert.ok(COPY[code].quizTitle.length > 0);
+    assert.ok(COPY[code].quizFavoritesTitle.length > 0);
     for (const airportCode of airportCodes) assert.ok(AIRPORT_CITIES[code][airportCode], `${code} is missing ${airportCode}`);
+  }
+});
+
+test("skipping the quiz preserves the current default city attractiveness", () => {
+  assert.deepEqual(buildPersonalizedAttractiveness(defaultTravelPreferences()), DEFAULT_CITY_ATTRACTIVENESS);
+});
+
+test("the four quiz dimensions produce different personalized city orders", () => {
+  const nature = buildPersonalizedAttractiveness(personalizedTravelPreferences(
+    { food: 1, culture: 1, nature: 5, urban: 1 },
+    [],
+  ));
+  const urban = buildPersonalizedAttractiveness(personalizedTravelPreferences(
+    { food: 1, culture: 1, nature: 1, urban: 5 },
+    [],
+  ));
+  assert.ok(nature.HNL > nature.HKG);
+  assert.ok(urban.HKG > urban.HNL);
+  assert.notDeepEqual(nature, urban);
+  for (const score of [...Object.values(nature), ...Object.values(urban)]) assert.ok(score >= 0 && score <= 100);
+});
+
+test("up to three favorite cities receive the highest internal priority", () => {
+  const preferences = sanitizeTravelPreferences({
+    version: 1,
+    mode: "personalized",
+    categories: { food: 5, culture: 1, nature: 1, urban: 1 },
+    favoriteCities: ["WUH", "MNL", "PEK", "HNL"],
+  });
+  assert.ok(preferences);
+  assert.equal(preferences.favoriteCities.length, FAVORITE_CITY_LIMIT);
+  const scores = buildPersonalizedAttractiveness(preferences);
+  const favorites = new Set(preferences.favoriteCities);
+  const lowestFavorite = Math.min(...preferences.favoriteCities.map((city) => scores[city]));
+  const highestUnselected = Math.max(...QUIZ_CITY_CODES.filter((city) => !favorites.has(city)).map((city) => scores[city]));
+  assert.ok(lowestFavorite > highestUnselected);
+  assert.ok(Math.max(...Object.values(scores)) <= 100);
+});
+
+test("personalized attractiveness changes route interest without breaking score bounds", () => {
+  const routes = ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX" && route.months.includes("Sep"));
+  const attractiveness = buildPersonalizedAttractiveness(personalizedTravelPreferences(
+    { food: 1, culture: 1, nature: 5, urban: 1 },
+    ["HNL"],
+  ));
+  const scored = scoreRoutes(routes, { price: 30, interest: 35, directness: 35 }, {}, attractiveness);
+  const honolulu = scored.find((route) => route.hubs.includes("HNL"));
+  const tokyo = scored.find((route) => route.hubs.includes("NRT"));
+  assert.ok(honolulu && tokyo);
+  assert.ok(honolulu.scores.attractiveness > tokyo.scores.attractiveness);
+  for (const route of scored) {
+    assert.ok(route.scores.interest >= 0 && route.scores.interest <= 100);
+    assert.ok(route.scores.total >= 0 && route.scores.total <= 100);
   }
 });
 
