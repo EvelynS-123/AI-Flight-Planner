@@ -415,7 +415,7 @@ export default function RouteFinder() {
 
   return (
     <>
-    <main className="planner">
+    <main className={`planner ${quizOpen ? "preference-open" : ""}`} aria-hidden={quizOpen || undefined}>
       <OriginalArtDefs />
       <header className="topbar">
         <a className="brand" href="#top" aria-label={copy.home}>
