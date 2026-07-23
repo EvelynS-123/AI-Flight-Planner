@@ -4,7 +4,7 @@ Via is a focused MVP for discovering and ranking flight routes from East Asia to
 
 ## Demo
 
-https://via-flight-planner-demo.xachaix.chatgpt.site
+https://via-planner.xachaix.chatgpt.site
 
 ## Current scope
 
