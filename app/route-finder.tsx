@@ -117,18 +117,28 @@ export default function RouteFinder() {
   const [stopoverSelections, setStopoverSelections] = useState<StopoverSelections>({});
   const [expanded, setExpanded] = useState<string | null>(null);
   const [searched, setSearched] = useState(true);
+  const [isDraggingWeights, setIsDraggingWeights] = useState(false);
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
   const previousPositions = useRef(new Map<string, number>());
   const reorderAnimations = useRef(new Map<string, Animation>());
   const allocationBarRef = useRef<HTMLDivElement>(null);
   const activeBoundary = useRef<"price-interest" | "interest-directness" | null>(null);
+  const dragOrder = useRef<string[] | null>(null);
+  const dragBarRect = useRef<DOMRect | null>(null);
+  const pendingBoundaryUpdate = useRef<{ boundary: "price-interest" | "interest-directness"; clientX: number } | null>(null);
+  const boundaryFrame = useRef<number | null>(null);
   const copy = COPY[locale];
   const localeOption = LOCALE_OPTIONS.find((item) => item.code === locale)!;
 
   const results = useMemo(() => {
     const matched = ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
-    return scoreRoutes(matched, weights, stopoverSelections).sort((a, b) => b.scores.total - a.scores.total || a.total - b.total);
-  }, [origin, destination, month, weights, stopoverSelections]);
+    const scored = scoreRoutes(matched, weights, stopoverSelections);
+    if (isDraggingWeights && dragOrder.current) {
+      const positions = new Map(dragOrder.current.map((id, index) => [id, index]));
+      return scored.sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+    }
+    return scored.sort((a, b) => b.scores.total - a.scores.total || a.total - b.total);
+  }, [origin, destination, month, weights, stopoverSelections, isDraggingWeights]);
 
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
@@ -138,6 +148,7 @@ export default function RouteFinder() {
   const handlesAreColliding = weights.interest <= 4;
 
   useLayoutEffect(() => {
+    if (isDraggingWeights) return;
     const nextPositions = new Map<string, number>();
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -170,7 +181,7 @@ export default function RouteFinder() {
       };
     }
     previousPositions.current = nextPositions;
-  }, [results]);
+  }, [results, isDraggingWeights]);
 
   useEffect(() => () => {
     for (const animation of reorderAnimations.current.values()) animation.cancel();
@@ -183,9 +194,16 @@ export default function RouteFinder() {
 
   useEffect(() => {
     const continueDrag = (event: globalThis.PointerEvent) => {
-      if (activeBoundary.current) moveBoundaryFromClientX(activeBoundary.current, event.clientX);
+      if (activeBoundary.current) queueBoundaryFromClientX(activeBoundary.current, event.clientX);
     };
-    const endDrag = () => { activeBoundary.current = null; };
+    const endDrag = () => {
+      if (!activeBoundary.current) return;
+      flushBoundaryUpdate();
+      activeBoundary.current = null;
+      dragBarRect.current = null;
+      dragOrder.current = null;
+      setIsDraggingWeights(false);
+    };
     window.addEventListener("pointermove", continueDrag);
     window.addEventListener("pointerup", endDrag);
     window.addEventListener("pointercancel", endDrag);
@@ -193,6 +211,7 @@ export default function RouteFinder() {
       window.removeEventListener("pointermove", continueDrag);
       window.removeEventListener("pointerup", endDrag);
       window.removeEventListener("pointercancel", endDrag);
+      if (boundaryFrame.current !== null) cancelAnimationFrame(boundaryFrame.current);
     };
   }, []);
 
@@ -200,19 +219,43 @@ export default function RouteFinder() {
     setWeights((current) => moveWeightBoundary(current, boundary, value));
   }
 
-  function moveBoundaryFromClientX(boundary: "price-interest" | "interest-directness", clientX: number) {
+  function applyBoundaryFromClientX(boundary: "price-interest" | "interest-directness", clientX: number) {
     const bar = allocationBarRef.current;
     if (!bar) return;
-    const rect = bar.getBoundingClientRect();
+    const rect = dragBarRect.current ?? bar.getBoundingClientRect();
     const value = ((clientX - rect.left) / rect.width) * 100;
     updateBoundary(boundary, value);
   }
 
+  function queueBoundaryFromClientX(boundary: "price-interest" | "interest-directness", clientX: number) {
+    pendingBoundaryUpdate.current = { boundary, clientX };
+    if (boundaryFrame.current !== null) return;
+    boundaryFrame.current = requestAnimationFrame(() => {
+      boundaryFrame.current = null;
+      const pending = pendingBoundaryUpdate.current;
+      pendingBoundaryUpdate.current = null;
+      if (pending) applyBoundaryFromClientX(pending.boundary, pending.clientX);
+    });
+  }
+
+  function flushBoundaryUpdate() {
+    if (boundaryFrame.current !== null) cancelAnimationFrame(boundaryFrame.current);
+    boundaryFrame.current = null;
+    const pending = pendingBoundaryUpdate.current;
+    pendingBoundaryUpdate.current = null;
+    if (pending) applyBoundaryFromClientX(pending.boundary, pending.clientX);
+  }
+
   function startBoundaryDrag(boundary: "price-interest" | "interest-directness", event: PointerEvent<HTMLButtonElement>) {
     event.preventDefault();
+    dragOrder.current = results.map((route) => route.id);
+    dragBarRect.current = allocationBarRef.current?.getBoundingClientRect() ?? null;
+    for (const animation of reorderAnimations.current.values()) animation.cancel();
+    reorderAnimations.current.clear();
+    setIsDraggingWeights(true);
     activeBoundary.current = boundary;
     event.currentTarget.setPointerCapture(event.pointerId);
-    moveBoundaryFromClientX(boundary, event.clientX);
+    applyBoundaryFromClientX(boundary, event.clientX);
   }
 
   function moveBoundaryFromKeyboard(boundary: "price-interest" | "interest-directness", event: KeyboardEvent<HTMLButtonElement>) {
@@ -322,7 +365,7 @@ export default function RouteFinder() {
           </div>
 
           {results.length > 0 && (
-            <div className="weight-panel" aria-label={copy.weightAria}>
+            <div className={`weight-panel ${isDraggingWeights ? "dragging" : ""}`} aria-label={copy.weightAria}>
               <div className="weight-intro">
                 <div><span>{copy.weightTitle}</span><strong>100%</strong></div>
                 <p>{copy.weightHelp}</p>
@@ -414,10 +457,11 @@ export default function RouteFinder() {
                             className="score-number"
                             value={Math.round(route.scores.total)}
                             plugins={SCORE_NUMBER_PLUGINS}
+                            animated={!isDraggingWeights}
                             transformTiming={{ duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }}
                             spinTiming={{ duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }}
                             opacityTiming={{ duration: 160, easing: "ease-out" }}
-                            willChange
+                            willChange={!isDraggingWeights}
                           />
                         </strong>
                       </div>
@@ -429,7 +473,7 @@ export default function RouteFinder() {
                     </button>
 
                     <div className="route-details" aria-hidden={!isOpen}>
-                      <div className="details-inner">
+                      {isOpen && <div className="details-inner">
                         <div className="warning-strip">
                           <span aria-hidden="true">!</span>
                           {route.ticketType === "multi-city" && <p>{copy.multiCityWarning}</p>}
@@ -514,7 +558,7 @@ export default function RouteFinder() {
                             </div>
                           </div>
                         </div>
-                      </div>
+                      </div>}
                     </div>
                   </article>
                   </div>

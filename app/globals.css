@@ -96,10 +96,12 @@ button:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid
 .allocation-stage { position: relative; margin: 0 10px; }
 .allocation-bar { height: 16px; display: flex; overflow: hidden; background: rgba(111, 145, 173, 0.16); border: 2px solid rgba(255, 255, 255, 0.82); border-radius: 999px; box-shadow: inset 0 1px 3px rgba(30, 61, 90, 0.12), 0 3px 10px rgba(58, 126, 168, 0.08); }
 .allocation-bar span { min-width: 0; transition: width 80ms linear; }
+.weight-panel.dragging .allocation-bar span { transition: none; }
 .allocation-price { background: linear-gradient(90deg, #3a7ea8, #63a6c8); }
 .allocation-interest { background: linear-gradient(90deg, #dfa15c, #edbd7b); }
 .allocation-directness { background: linear-gradient(90deg, #6b947e, #8ab19b); }
 .allocation-handle { position: absolute; z-index: 2; top: 50%; width: 22px; height: 22px; min-height: 0; margin: 0; padding: 0; background: white; border: 2px solid var(--blue-dark); border-radius: 50%; box-shadow: 0 3px 12px rgba(30, 61, 90, 0.28); cursor: grab; touch-action: none; transform: translate(-50%, -50%); transition: left 80ms linear, width 180ms var(--spring), border-radius 180ms var(--spring), transform 180ms var(--spring), box-shadow 140ms ease; }
+.weight-panel.dragging .allocation-handle { cursor: grabbing; transition: width 180ms var(--spring), border-radius 180ms var(--spring), transform 180ms var(--spring), box-shadow 140ms ease; }
 .allocation-handle:hover { transform: translate(-50%, -50%) scale(1.08); box-shadow: 0 5px 15px rgba(30, 61, 90, 0.34); }
 .allocation-handle:active { transform: translate(-50%, -50%) scale(1.15); cursor: grabbing; }
 .allocation-handle:focus-visible { outline-offset: 4px; }
