@@ -303,6 +303,7 @@ export function scoreRoutes(
   routes: RouteOption[],
   weights: RouteWeights = { price: 30, interest: 35, directness: 35 },
   selections: StopoverSelections = {},
+  cityAttractiveness?: Record<string, number>,
 ) {
-  return scoreScheduledRoutes(routes, weights, selections);
+  return scoreScheduledRoutes(routes, weights, selections, cityAttractiveness);
 }

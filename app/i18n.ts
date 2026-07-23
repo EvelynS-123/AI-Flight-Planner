@@ -9,6 +9,26 @@ export type Locale = (typeof LOCALE_OPTIONS)[number]["code"];
 
 export type Copy = {
   language: string;
+  preferences: string;
+  quizStep: (step: number) => string;
+  quizTitle: string;
+  quizBody: string;
+  quizCategoryTitle: string;
+  quizCategoryHelp: string;
+  quizFood: string;
+  quizCulture: string;
+  quizNature: string;
+  quizUrban: string;
+  quizLow: string;
+  quizHigh: string;
+  quizFavoritesTitle: string;
+  quizFavoritesHelp: string;
+  quizFavoritesCount: (count: number) => string;
+  quizSkip: string;
+  quizBack: string;
+  quizNext: string;
+  quizSave: string;
+  quizClose: string;
   home: string;
   demoBadge: string;
   heroEyebrow: string;
@@ -75,6 +95,26 @@ export type Copy = {
 
 export const COPY: Record<Locale, Copy> = {
   zh: {
+    preferences: "旅行偏好",
+    quizStep: (step) => `第 ${step} 步，共 2 步`,
+    quizTitle: "什么样的中转值得停下来？",
+    quizBody: "用几个轻量选择，让“最有趣”更像你的答案。你可以随时修改。",
+    quizCategoryTitle: "你旅行时更在意什么？",
+    quizCategoryHelp: "分别选择兴趣程度，1 表示不太在意，5 表示非常喜欢。",
+    quizFood: "美食探索",
+    quizCulture: "历史文化",
+    quizNature: "自然休闲",
+    quizUrban: "现代都市",
+    quizLow: "不太在意",
+    quizHigh: "非常喜欢",
+    quizFavoritesTitle: "有没有特别想去的城市？",
+    quizFavoritesHelp: "可选，最多选择 3 个。它们会在城市吸引力中获得最高优先级。",
+    quizFavoritesCount: (count) => `已选择 ${count}/3`,
+    quizSkip: "跳过，使用默认推荐",
+    quizBack: "上一步",
+    quizNext: "下一步",
+    quizSave: "保存偏好",
+    quizClose: "关闭偏好设置",
     totalDuration: "全程时间",
     stopoverPlan: "中转地停留",
     connectionTime: "中转时间",
@@ -140,6 +180,26 @@ export const COPY: Record<Locale, Copy> = {
     sourceFare: "原始报价",
   },
   en: {
+    preferences: "Travel preferences",
+    quizStep: (step) => `Step ${step} of 2`,
+    quizTitle: "What makes a stop worth taking?",
+    quizBody: "A few quick choices make “most interesting” feel like your answer. You can edit them anytime.",
+    quizCategoryTitle: "What matters to you when you travel?",
+    quizCategoryHelp: "Rate each interest from 1, not important, to 5, love it.",
+    quizFood: "Food discovery",
+    quizCulture: "History & culture",
+    quizNature: "Nature & downtime",
+    quizUrban: "Modern city life",
+    quizLow: "Not important",
+    quizHigh: "Love it",
+    quizFavoritesTitle: "Any cities already calling you?",
+    quizFavoritesHelp: "Optional. Pick up to three; they receive the highest city-attractiveness priority.",
+    quizFavoritesCount: (count) => `${count}/3 selected`,
+    quizSkip: "Skip and use default picks",
+    quizBack: "Back",
+    quizNext: "Next",
+    quizSave: "Save preferences",
+    quizClose: "Close preferences",
     totalDuration: "Total journey",
     stopoverPlan: "Stopover stay",
     connectionTime: "Connection time",
@@ -205,6 +265,26 @@ export const COPY: Record<Locale, Copy> = {
     sourceFare: "source fare",
   },
   ko: {
+    preferences: "여행 취향",
+    quizStep: (step) => `2단계 중 ${step}단계`,
+    quizTitle: "어떤 경유지라면 머물고 싶나요?",
+    quizBody: "몇 가지 선택으로 ‘가장 흥미로운’ 순위를 나에게 맞출 수 있습니다. 언제든 수정할 수 있어요.",
+    quizCategoryTitle: "여행에서 무엇을 중요하게 생각하나요?",
+    quizCategoryHelp: "관심이 적으면 1, 매우 좋아하면 5를 선택하세요.",
+    quizFood: "미식 탐방",
+    quizCulture: "역사와 문화",
+    quizNature: "자연과 휴식",
+    quizUrban: "현대 도시",
+    quizLow: "관심 적음",
+    quizHigh: "매우 좋아함",
+    quizFavoritesTitle: "특히 가고 싶은 도시가 있나요?",
+    quizFavoritesHelp: "선택 사항이며 최대 3곳까지 가능합니다. 도시 매력도에서 가장 높은 우선순위를 받습니다.",
+    quizFavoritesCount: (count) => `${count}/3 선택`,
+    quizSkip: "건너뛰고 기본 추천 사용",
+    quizBack: "이전",
+    quizNext: "다음",
+    quizSave: "취향 저장",
+    quizClose: "여행 취향 닫기",
     totalDuration: "총 여행 시간",
     stopoverPlan: "스톱오버 체류",
     connectionTime: "환승 시간",
@@ -270,6 +350,26 @@ export const COPY: Record<Locale, Copy> = {
     sourceFare: "원문 운임",
   },
   ja: {
+    preferences: "旅の好み",
+    quizStep: (step) => `2ステップ中 ${step}`,
+    quizTitle: "立ち寄りたくなる経由地は？",
+    quizBody: "いくつかの選択で「最も面白い」をあなた向けにします。いつでも変更できます。",
+    quizCategoryTitle: "旅で何を重視しますか？",
+    quizCategoryHelp: "関心が低ければ1、大好きなら5を選んでください。",
+    quizFood: "食の探索",
+    quizCulture: "歴史と文化",
+    quizNature: "自然と休息",
+    quizUrban: "現代都市",
+    quizLow: "あまり重視しない",
+    quizHigh: "大好き",
+    quizFavoritesTitle: "特に行きたい都市はありますか？",
+    quizFavoritesHelp: "任意で最大3都市。都市の魅力度で最優先になります。",
+    quizFavoritesCount: (count) => `${count}/3 選択`,
+    quizSkip: "スキップして既定のおすすめを使う",
+    quizBack: "戻る",
+    quizNext: "次へ",
+    quizSave: "好みを保存",
+    quizClose: "旅の好みを閉じる",
     totalDuration: "総移動時間",
     stopoverPlan: "ストップオーバー滞在",
     connectionTime: "乗り継ぎ時間",

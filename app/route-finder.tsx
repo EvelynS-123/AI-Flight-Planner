@@ -5,6 +5,20 @@ import NumberFlow, { continuous } from "@number-flow/react";
 import { DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
 import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./flight-schedules";
 import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
+import {
+  DEFAULT_PREFERENCE_LEVELS,
+  FAVORITE_CITY_LIMIT,
+  PREFERENCE_CATEGORIES,
+  PREFERENCE_STORAGE_KEY,
+  QUIZ_CITY_CODES,
+  buildPersonalizedAttractiveness,
+  defaultTravelPreferences,
+  personalizedTravelPreferences,
+  sanitizeTravelPreferences,
+  type PreferenceCategory,
+  type PreferenceLevels,
+  type TravelPreferenceState,
+} from "./travel-preferences";
 
 const SCORE_NUMBER_PLUGINS = [continuous];
 
@@ -115,6 +129,11 @@ export default function RouteFinder() {
   const [month, setMonth] = useState<"Aug" | "Sep">("Sep");
   const [weights, setWeights] = useState<RouteWeights>({ price: 30, interest: 35, directness: 35 });
   const [stopoverSelections, setStopoverSelections] = useState<StopoverSelections>({});
+  const [travelPreferences, setTravelPreferences] = useState<TravelPreferenceState | null>(null);
+  const [preferenceDraft, setPreferenceDraft] = useState<PreferenceLevels>({ ...DEFAULT_PREFERENCE_LEVELS });
+  const [favoriteDraft, setFavoriteDraft] = useState<string[]>([]);
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [quizStep, setQuizStep] = useState<1 | 2>(1);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [searched, setSearched] = useState(true);
   const [isDraggingWeights, setIsDraggingWeights] = useState(false);
@@ -127,18 +146,24 @@ export default function RouteFinder() {
   const dragBarRect = useRef<DOMRect | null>(null);
   const pendingBoundaryUpdate = useRef<{ boundary: "price-interest" | "interest-directness"; clientX: number } | null>(null);
   const boundaryFrame = useRef<number | null>(null);
+  const quizPanelRef = useRef<HTMLElement>(null);
   const copy = COPY[locale];
   const localeOption = LOCALE_OPTIONS.find((item) => item.code === locale)!;
 
+  const personalizedAttractiveness = useMemo(
+    () => travelPreferences?.mode === "personalized" ? buildPersonalizedAttractiveness(travelPreferences) : undefined,
+    [travelPreferences],
+  );
+
   const results = useMemo(() => {
     const matched = ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
-    const scored = scoreRoutes(matched, weights, stopoverSelections);
+    const scored = scoreRoutes(matched, weights, stopoverSelections, personalizedAttractiveness);
     if (isDraggingWeights && dragOrder.current) {
       const positions = new Map(dragOrder.current.map((id, index) => [id, index]));
       return scored.sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
     }
     return scored.sort((a, b) => b.scores.total - a.scores.total || a.total - b.total);
-  }, [origin, destination, month, weights, stopoverSelections, isDraggingWeights]);
+  }, [origin, destination, month, weights, stopoverSelections, personalizedAttractiveness, isDraggingWeights]);
 
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
@@ -191,6 +216,35 @@ export default function RouteFinder() {
   useEffect(() => {
     document.documentElement.lang = localeOption.htmlLang;
   }, [localeOption.htmlLang]);
+
+  useEffect(() => {
+    let stored: TravelPreferenceState | null = null;
+    try {
+      stored = sanitizeTravelPreferences(JSON.parse(localStorage.getItem(PREFERENCE_STORAGE_KEY) ?? "null"));
+    } catch {
+      stored = null;
+    }
+    if (stored) {
+      setTravelPreferences(stored);
+      setPreferenceDraft({ ...stored.categories });
+      setFavoriteDraft([...stored.favoriteCities]);
+    } else {
+      setQuizOpen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!quizOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const frame = requestAnimationFrame(() => quizPanelRef.current?.querySelector<HTMLElement>("button:not([disabled]), select")?.focus());
+    return () => {
+      cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
+      previousFocus?.focus();
+    };
+  }, [quizOpen]);
 
   useEffect(() => {
     const continueDrag = (event: globalThis.PointerEvent) => {
@@ -295,7 +349,72 @@ export default function RouteFinder() {
     }
   }
 
+  function storePreferences(next: TravelPreferenceState) {
+    localStorage.setItem(PREFERENCE_STORAGE_KEY, JSON.stringify(next));
+    setTravelPreferences(next);
+    setPreferenceDraft({ ...next.categories });
+    setFavoriteDraft([...next.favoriteCities]);
+    setQuizOpen(false);
+  }
+
+  function openPreferences() {
+    const current = travelPreferences ?? defaultTravelPreferences();
+    setPreferenceDraft({ ...current.categories });
+    setFavoriteDraft([...current.favoriteCities]);
+    setQuizStep(1);
+    setQuizOpen(true);
+  }
+
+  function skipPreferences() {
+    storePreferences(defaultTravelPreferences());
+  }
+
+  function savePreferences() {
+    storePreferences(personalizedTravelPreferences(preferenceDraft, favoriteDraft));
+  }
+
+  function closePreferences() {
+    if (travelPreferences) setQuizOpen(false);
+    else skipPreferences();
+  }
+
+  function toggleFavorite(city: string) {
+    setFavoriteDraft((current) => {
+      if (current.includes(city)) return current.filter((item) => item !== city);
+      if (current.length >= FAVORITE_CITY_LIMIT) return current;
+      return [...current, city];
+    });
+  }
+
+  function handleQuizKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closePreferences();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...(quizPanelRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), select:not([disabled])") ?? [])];
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable.at(-1)!;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  const quizCategoryLabels: Record<PreferenceCategory, string> = {
+    food: copy.quizFood,
+    culture: copy.quizCulture,
+    nature: copy.quizNature,
+    urban: copy.quizUrban,
+  };
+
   return (
+    <>
     <main className="planner">
       <OriginalArtDefs />
       <header className="topbar">
@@ -304,6 +423,7 @@ export default function RouteFinder() {
           <span>AI Flight Planner</span>
         </a>
         <div className="topbar-actions">
+          <button className="preferences-button" type="button" onClick={openPreferences}><span aria-hidden="true">✦</span>{copy.preferences}</button>
           <span className="demo-badge">{copy.demoBadge}</span>
           <label className="language-picker">
             <span className="sr-only">{copy.language}</span>
@@ -574,5 +694,111 @@ export default function RouteFinder() {
         <p>{copy.footer}</p>
       </footer>
     </main>
+    {quizOpen && (
+      <div className="preference-overlay">
+        <section
+          className="preference-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="preference-title"
+          ref={quizPanelRef}
+          onKeyDown={handleQuizKeyDown}
+        >
+          <header className="preference-header">
+            <div>
+              <p>{copy.quizStep(quizStep)}</p>
+              <h2 id="preference-title">{copy.quizTitle}</h2>
+              <span>{copy.quizBody}</span>
+            </div>
+            <div className="preference-header-actions">
+              <label className="language-picker quiz-language-picker">
+                <span className="sr-only">{copy.language}</span>
+                <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)} aria-label={copy.language}>
+                  {LOCALE_OPTIONS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
+                </select>
+              </label>
+              <button className="quiz-close" type="button" onClick={closePreferences} aria-label={travelPreferences ? copy.quizClose : copy.quizSkip}>×</button>
+            </div>
+          </header>
+
+          <div className="quiz-progress" aria-hidden="true">
+            <span className="active" />
+            <span className={quizStep === 2 ? "active" : ""} />
+          </div>
+
+          <div className="preference-pages" data-step={quizStep}>
+            {quizStep === 1 ? (
+              <div className="preference-page category-page">
+                <div className="quiz-section-title">
+                  <h3>{copy.quizCategoryTitle}</h3>
+                  <p>{copy.quizCategoryHelp}</p>
+                </div>
+                <div className="preference-categories">
+                  {PREFERENCE_CATEGORIES.map((category) => (
+                    <fieldset className="preference-category" key={category}>
+                      <legend>{quizCategoryLabels[category]}</legend>
+                      <div className="preference-scale">
+                        {[1, 2, 3, 4, 5].map((level) => (
+                          <button
+                            type="button"
+                            key={level}
+                            className={preferenceDraft[category] === level ? "selected" : ""}
+                            aria-pressed={preferenceDraft[category] === level}
+                            aria-label={`${quizCategoryLabels[category]} ${level}/5`}
+                            onClick={() => setPreferenceDraft((current) => ({ ...current, [category]: level }))}
+                          >
+                            <span>{level}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="preference-scale-labels"><span>{copy.quizLow}</span><span>{copy.quizHigh}</span></div>
+                    </fieldset>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="preference-page favorites-page">
+                <div className="quiz-section-title">
+                  <h3>{copy.quizFavoritesTitle}</h3>
+                  <p>{copy.quizFavoritesHelp}</p>
+                </div>
+                <div className="favorite-count">{copy.quizFavoritesCount(favoriteDraft.length)}</div>
+                <div className="favorite-city-grid">
+                  {QUIZ_CITY_CODES.map((city) => {
+                    const selected = favoriteDraft.includes(city);
+                    const unavailable = !selected && favoriteDraft.length >= FAVORITE_CITY_LIMIT;
+                    return (
+                      <button
+                        type="button"
+                        key={city}
+                        className={selected ? "selected" : ""}
+                        aria-pressed={selected}
+                        disabled={unavailable}
+                        onClick={() => toggleFavorite(city)}
+                      >
+                        <strong>{city}</strong>
+                        <span>{airportCity(city, locale)}</span>
+                        <i aria-hidden="true">{selected ? "✓" : "+"}</i>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <footer className="preference-footer">
+            <button className="quiz-skip" type="button" onClick={skipPreferences}>{copy.quizSkip}</button>
+            <div>
+              {quizStep === 2 && <button className="quiz-back" type="button" onClick={() => setQuizStep(1)}>{copy.quizBack}</button>}
+              {quizStep === 1
+                ? <button className="quiz-primary" type="button" onClick={() => setQuizStep(2)}>{copy.quizNext}<span aria-hidden="true">→</span></button>
+                : <button className="quiz-primary" type="button" onClick={savePreferences}>{copy.quizSave}<span aria-hidden="true">✓</span></button>}
+            </div>
+          </footer>
+        </section>
+      </div>
+    )}
+    </>
   );
 }
