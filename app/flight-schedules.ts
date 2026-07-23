@@ -1,4 +1,5 @@
 import type { RouteOption, RouteWeights, Segment } from "./route-data";
+import { DEFAULT_CITY_ATTRACTIVENESS } from "./travel-preferences.ts";
 
 type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -78,11 +79,6 @@ const AIRPORT_OFFSET_MINUTES: Record<string, number> = {
   PVG: 480, PEK: 480, HKG: 480, TPE: 480, CAN: 480, WUH: 480, MNL: 480,
   ICN: 540, NRT: 540, KIX: 540, HNL: -600,
   LAX: -420, SFO: -420, SEA: -420, YVR: -420,
-};
-
-const HUB_ATTRACTIVENESS: Record<string, number> = {
-  HNL: 98, NRT: 88, HKG: 86, KIX: 86, TPE: 84, ICN: 82, YVR: 82,
-  PEK: 80, MNL: 78, CAN: 76, WUH: 74,
 };
 
 const AIRPORT_CITY_MINUTES: Record<string, number> = {
@@ -451,6 +447,7 @@ export function scoreScheduledRoutes(
   routes: RouteOption[],
   weights: RouteWeights,
   selections: StopoverSelections = {},
+  cityAttractiveness: Record<string, number> = DEFAULT_CITY_ATTRACTIVENESS,
 ): RankedRouteOption[] {
   const scheduled = routes
     .map((route) => ({ route, schedule: buildSchedule(route, selections[route.id] ?? []) }))
@@ -475,7 +472,7 @@ export function scoreScheduledRoutes(
     const convenience = Math.max(0, 100 - conveniencePenalty);
     const directness = Math.max(0, Math.min(100, 0.4 * stops + 0.4 * duration + 0.2 * convenience));
 
-    const attractiveness = average(schedule.scheduledStops.map((stop) => HUB_ATTRACTIVENESS[stop.airport] ?? 70));
+    const attractiveness = average(schedule.scheduledStops.map((stop) => cityAttractiveness[stop.airport] ?? 70));
     const usableTime = average(schedule.scheduledStops.map((stop) => usableTimeScore(stop.usableMinutes)));
     const airportAccess = average(schedule.scheduledStops.map((stop) => airportAccessScore(stop.airport)));
     const timeWindow = average(schedule.scheduledStops.map(timeWindowScore));

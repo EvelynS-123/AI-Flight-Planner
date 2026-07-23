@@ -48,6 +48,10 @@ button:focus-visible, select:focus-visible, a:focus-visible { outline: 3px solid
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-family: "Segoe Print", "Comic Sans MS", cursive; font-weight: 720; font-size: 19px; letter-spacing: -0.03em; }
 .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; color: white; background: linear-gradient(145deg, #1292ff, #075bde); border-radius: 11px; box-shadow: 0 7px 18px rgba(5, 103, 232, 0.28); font-weight: 800; }
 .topbar-actions { display: flex; align-items: center; gap: 9px; }
+.preferences-button { min-height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 999px; color: var(--ink); background: rgba(255, 255, 255, 0.72); box-shadow: 0 4px 14px rgba(58, 126, 168, 0.08); font-size: 12px; font-weight: 700; cursor: pointer; transition: transform 260ms var(--spring), background 180ms ease, box-shadow 260ms var(--spring); }
+.preferences-button span { color: #d58f42; }
+.preferences-button:hover { background: rgba(255, 255, 255, 0.92); box-shadow: 0 7px 18px rgba(58, 126, 168, 0.13); transform: translateY(-1px); }
+.preferences-button:active { transform: scale(0.96); transition-duration: 80ms; }
 .demo-badge { padding: 7px 11px; background: rgba(255, 255, 255, 0.68); border: 1px solid rgba(255, 255, 255, 0.85); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 650; }
 .language-picker { position: relative; display: inline-flex; align-items: center; }
 .language-picker::after { content: "⌄"; position: absolute; right: 10px; top: 50%; color: var(--muted); font-size: 12px; pointer-events: none; transform: translateY(-56%); }
@@ -227,6 +231,59 @@ footer { max-width: 1160px; display: flex; justify-content: space-between; gap: 
 footer span { color: var(--ink); font-weight: 700; }
 footer p { max-width: 680px; margin: 0; text-align: right; }
 
+.preference-overlay { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(30, 61, 90, 0.32); backdrop-filter: blur(14px) saturate(120%); -webkit-backdrop-filter: blur(14px) saturate(120%); animation: preference-overlay-in 220ms ease-out both; }
+.preference-dialog { width: min(720px, 100%); max-height: min(880px, calc(100vh - 48px)); overflow: auto; color: var(--ink); background: rgba(250, 253, 255, 0.9); border: 1px solid rgba(255, 255, 255, 0.95); border-radius: 28px 32px 26px 34px; box-shadow: 0 38px 110px rgba(30, 61, 90, 0.3), 0 8px 30px rgba(30, 61, 90, 0.14); backdrop-filter: blur(28px) saturate(150%); -webkit-backdrop-filter: blur(28px) saturate(150%); transform-origin: center 70%; animation: preference-dialog-in 380ms var(--spring) both; }
+@keyframes preference-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes preference-dialog-in { from { opacity: 0; transform: translate3d(0, 20px, 0) scale(0.965); } to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); } }
+.preference-header { max-width: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin: 0; padding: 28px 30px 20px; border: 0; color: inherit; }
+.preference-header > div:first-child { max-width: 520px; }
+.preference-header p { margin: 0 0 7px; color: var(--blue); text-align: left; font-size: 11px; font-weight: 780; letter-spacing: 0.1em; text-transform: uppercase; }
+.preference-header h2 { margin: 0; font-family: "Segoe Print", "Comic Sans MS", cursive; font-size: clamp(25px, 4vw, 34px); line-height: 1.15; letter-spacing: -0.04em; }
+.preference-header > div:first-child > span { display: block; margin-top: 9px; color: var(--muted); font-size: 13px; font-weight: 520; line-height: 1.55; }
+.preference-header-actions { flex: none; display: flex; align-items: center; gap: 8px; }
+.quiz-close { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(90, 156, 192, 0.16); border-radius: 50%; color: var(--muted); background: rgba(255, 255, 255, 0.72); font-size: 23px; line-height: 1; cursor: pointer; transition: transform 260ms var(--spring), background 180ms ease; }
+.quiz-close:hover { color: var(--ink); background: white; transform: rotate(4deg) scale(1.05); }
+.quiz-close:active { transform: scale(0.92); transition-duration: 80ms; }
+.quiz-progress { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 30px; }
+.quiz-progress span { height: 4px; overflow: hidden; background: rgba(90, 156, 192, 0.14); border-radius: 999px; }
+.quiz-progress span::after { content: ""; width: 100%; height: 100%; display: block; background: linear-gradient(90deg, #5a9cc0, #7eb7d2); border-radius: inherit; transform: scaleX(0); transform-origin: left; transition: transform 360ms var(--spring); }
+.quiz-progress span.active::after { transform: scaleX(1); }
+.preference-pages { min-height: 410px; padding: 24px 30px 8px; }
+.preference-page { animation: preference-page-in 320ms var(--spring) both; }
+@keyframes preference-page-in { from { opacity: 0; transform: translate3d(12px, 0, 0); } to { opacity: 1; transform: translate3d(0, 0, 0); } }
+.quiz-section-title h3 { margin: 0; font-size: 17px; letter-spacing: -0.015em; }
+.quiz-section-title p { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.preference-categories { display: grid; gap: 10px; margin-top: 18px; }
+.preference-category { display: grid; grid-template-columns: minmax(120px, 0.75fr) minmax(260px, 1.35fr); gap: 12px 20px; align-items: center; margin: 0; padding: 13px 15px; border: 1px solid rgba(90, 156, 192, 0.13); border-radius: 16px 19px 15px 20px; background: rgba(255, 255, 255, 0.58); }
+.preference-category legend { display: contents; color: var(--ink); font-size: 13px; font-weight: 760; }
+.preference-scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
+.preference-scale button { min-height: 36px; padding: 0; border: 1px solid rgba(90, 156, 192, 0.16); border-radius: 11px; color: var(--muted); background: rgba(232, 243, 250, 0.64); font-size: 12px; font-weight: 760; cursor: pointer; transition: color 180ms ease, background 240ms var(--spring), border-color 180ms ease, transform 240ms var(--spring), box-shadow 240ms ease; }
+.preference-scale button:hover { color: var(--ink); background: rgba(255, 255, 255, 0.96); transform: translateY(-1px); }
+.preference-scale button:active { transform: scale(0.93); transition-duration: 80ms; }
+.preference-scale button.selected { color: white; background: linear-gradient(145deg, #5a9cc0, #3a7ea8); border-color: transparent; box-shadow: 0 7px 15px rgba(58, 126, 168, 0.2); transform: scale(1.045); }
+.preference-scale-labels { grid-column: 2; display: flex; justify-content: space-between; margin-top: -7px; color: var(--muted); font-size: 9px; }
+.favorite-count { width: fit-content; margin: 18px 0 10px; padding: 5px 9px; color: var(--blue-dark); background: rgba(232, 243, 250, 0.82); border-radius: 999px; font-size: 10px; font-weight: 760; }
+.favorite-city-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.favorite-city-grid button { min-width: 0; display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 12px; border: 1px solid rgba(90, 156, 192, 0.15); border-radius: 14px 17px 13px 18px; color: var(--ink); background: rgba(255, 255, 255, 0.62); text-align: left; cursor: pointer; transition: transform 260ms var(--spring), background 200ms ease, border-color 200ms ease, box-shadow 260ms var(--spring), opacity 180ms ease; }
+.favorite-city-grid button:hover:not(:disabled) { background: white; transform: translateY(-2px); box-shadow: 0 8px 18px rgba(58, 126, 168, 0.1); }
+.favorite-city-grid button:active:not(:disabled) { transform: scale(0.96); transition-duration: 80ms; }
+.favorite-city-grid button.selected { color: #6e4d17; background: #fff3df; border-color: rgba(232, 168, 108, 0.5); box-shadow: 0 8px 20px rgba(232, 168, 108, 0.14); }
+.favorite-city-grid button:disabled { opacity: 0.38; cursor: not-allowed; }
+.favorite-city-grid strong { font-size: 12px; }
+.favorite-city-grid span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.favorite-city-grid i { width: 21px; height: 21px; display: grid; place-items: center; color: var(--blue); background: rgba(232, 243, 250, 0.9); border-radius: 50%; font-size: 12px; font-style: normal; font-weight: 800; }
+.favorite-city-grid button.selected i { color: white; background: var(--amber); }
+.preference-footer { max-width: none; display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 0; padding: 18px 30px 26px; border: 0; color: inherit; }
+.preference-footer > div { display: flex; gap: 9px; }
+.preference-footer button { min-height: 42px; padding: 0 17px; border-radius: 999px; font-size: 12px; font-weight: 760; cursor: pointer; transition: transform 260ms var(--spring), background 180ms ease, box-shadow 260ms var(--spring); }
+.preference-footer button:active { transform: scale(0.96); transition-duration: 80ms; }
+.quiz-skip { padding-inline: 0 !important; border: 0; color: var(--muted); background: transparent; }
+.quiz-skip:hover { color: var(--ink); }
+.quiz-back { border: 1px solid rgba(90, 156, 192, 0.17); color: var(--ink); background: rgba(255, 255, 255, 0.72); }
+.quiz-primary { display: inline-flex; align-items: center; gap: 9px; border: 0; color: white; background: linear-gradient(135deg, #5a9cc0, #3a7ea8); box-shadow: 0 10px 20px rgba(58, 126, 168, 0.22); }
+.quiz-primary:hover { box-shadow: 0 14px 26px rgba(58, 126, 168, 0.28); transform: translateY(-1px); }
+.quiz-primary span { color: inherit; }
+
 @media (max-width: 900px) {
   .hero { padding-top: 68px; }
   .original-sky { opacity: 0.62; left: 42%; }
@@ -246,6 +303,8 @@ footer p { max-width: 680px; margin: 0; text-align: right; }
   .topbar { height: 60px; padding-inline: 18px; }
   .brand { gap: 7px; font-size: 16px; }
   .demo-badge { display: none; }
+  .topbar-actions { gap: 6px; }
+  .preferences-button { max-width: 110px; overflow: hidden; padding-inline: 9px; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
   .language-picker select { max-width: 82px; }
   .hero { min-height: 610px; padding: 48px 16px 54px; }
   .hero h1 { font-size: 43px; }
@@ -292,6 +351,24 @@ footer p { max-width: 680px; margin: 0; text-align: right; }
   .score-note { grid-template-columns: 1fr; gap: 5px; }
   footer { flex-direction: column; padding-inline: 16px; }
   footer p { text-align: left; }
+  .preference-overlay { align-items: end; padding: 0; }
+  .preference-dialog { width: 100%; max-height: 94vh; border-radius: 27px 27px 0 0; transform-origin: center bottom; }
+  .preference-header { padding: 22px 18px 17px; }
+  .preference-header h2 { font-size: 25px; }
+  .preference-header > div:first-child > span { font-size: 12px; }
+  .preference-header { align-items: stretch; flex-direction: column-reverse; gap: 12px; }
+  .preference-header-actions { width: 100%; justify-content: flex-end; }
+  .quiz-language-picker { display: inline-flex; }
+  .quiz-progress { padding-inline: 18px; }
+  .preference-pages { min-height: 420px; padding: 19px 18px 6px; }
+  .preference-category { grid-template-columns: 1fr; gap: 10px; padding: 12px; }
+  .preference-category legend { display: block; }
+  .preference-scale-labels { grid-column: 1; }
+  .favorite-city-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .preference-footer { align-items: stretch; flex-direction: column-reverse; padding: 14px 18px max(20px, env(safe-area-inset-bottom)); }
+  .preference-footer > div { width: 100%; }
+  .preference-footer > div button { flex: 1; }
+  .quiz-skip { align-self: center; min-height: 34px !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -299,10 +376,11 @@ footer p { max-width: 680px; margin: 0; text-align: right; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .topbar, .search-card, .route-card { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .topbar, .search-card, .route-card, .preference-dialog { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .preference-overlay { background: rgba(30, 61, 90, 0.58); backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
 @media (prefers-contrast: more) {
   :root { --line: rgba(0, 0, 0, 0.35); }
-  .search-card, .route-card, .select-field { border-color: rgba(0, 0, 0, 0.42); }
+  .search-card, .route-card, .select-field, .preference-dialog, .preference-category { border-color: rgba(0, 0, 0, 0.42); }
 }
