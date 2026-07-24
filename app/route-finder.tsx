@@ -5,6 +5,7 @@ import NumberFlow, { continuous } from "@number-flow/react";
 import { DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
 import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./flight-schedules";
 import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
+import AITravelWorkspace from "./ai-travel-workspace";
 import {
   DEFAULT_PREFERENCE_LEVELS,
   FAVORITE_CITY_LIMIT,
@@ -135,9 +136,17 @@ export default function RouteFinder() {
   const [quizOpen, setQuizOpen] = useState(false);
   const [quizStep, setQuizStep] = useState<1 | 2>(1);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [closingRouteId, setClosingRouteId] = useState<string | null>(null);
+  const [aiRouteId, setAiRouteId] = useState<string | null>(null);
+  const [aiOriginRect, setAiOriginRect] = useState<DOMRect | null>(null);
   const [searched, setSearched] = useState(true);
   const [isDraggingWeights, setIsDraggingWeights] = useState(false);
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
+  const closingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routeSwitchToken = useRef(0);
+  const expandAnchor = useRef<{ id: string; top: number; startedAt: number } | null>(null);
+  const expandAnchorFrame = useRef<number | null>(null);
+  const previousScrollBehavior = useRef("");
   const previousPositions = useRef(new Map<string, number>());
   const reorderAnimations = useRef(new Map<string, Animation>());
   const allocationBarRef = useRef<HTMLDivElement>(null);
@@ -170,6 +179,7 @@ export default function RouteFinder() {
     for (const route of results) counts[route.ticketType] += 1;
     return copy.routeSummary(results.length, counts.direct, counts.connection, counts["multi-city"]);
   }, [results, copy]);
+  const aiRoute = results.find((route) => route.id === aiRouteId) ?? null;
   const handlesAreColliding = weights.interest <= 4;
 
   useLayoutEffect(() => {
@@ -208,9 +218,60 @@ export default function RouteFinder() {
     previousPositions.current = nextPositions;
   }, [results, isDraggingWeights]);
 
+  useLayoutEffect(() => {
+    const anchor = expandAnchor.current;
+    if (!anchor || expanded !== anchor.id) return;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    previousScrollBehavior.current = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = "auto";
+
+    const keepClickedCardStill = () => {
+      const element = cardRefs.current.get(anchor.id);
+      if (!element || expandAnchor.current !== anchor) return;
+      const delta = element.getBoundingClientRect().top - anchor.top;
+      if (Math.abs(delta) > 0.25) window.scrollTo({ top: window.scrollY + delta, behavior: "auto" });
+      if (!reduceMotion && performance.now() - anchor.startedAt < 520) {
+        expandAnchorFrame.current = requestAnimationFrame(keepClickedCardStill);
+      } else {
+        expandAnchor.current = null;
+        expandAnchorFrame.current = null;
+        document.documentElement.style.scrollBehavior = previousScrollBehavior.current;
+      }
+    };
+
+    keepClickedCardStill();
+    return () => {
+      if (expandAnchorFrame.current !== null) cancelAnimationFrame(expandAnchorFrame.current);
+      expandAnchorFrame.current = null;
+      document.documentElement.style.scrollBehavior = previousScrollBehavior.current;
+    };
+  }, [expanded]);
+
   useEffect(() => () => {
     for (const animation of reorderAnimations.current.values()) animation.cancel();
     reorderAnimations.current.clear();
+    if (closingTimer.current) clearTimeout(closingTimer.current);
+    if (expandAnchorFrame.current !== null) cancelAnimationFrame(expandAnchorFrame.current);
+    document.documentElement.style.scrollBehavior = previousScrollBehavior.current;
+  }, []);
+
+  useEffect(() => {
+    const cancelAnchor = () => {
+      routeSwitchToken.current += 1;
+      if (!expandAnchor.current) return;
+      expandAnchor.current = null;
+      if (expandAnchorFrame.current !== null) cancelAnimationFrame(expandAnchorFrame.current);
+      expandAnchorFrame.current = null;
+      document.documentElement.style.scrollBehavior = previousScrollBehavior.current;
+    };
+    window.addEventListener("wheel", cancelAnchor, { passive: true });
+    window.addEventListener("touchmove", cancelAnchor, { passive: true });
+    window.addEventListener("keydown", cancelAnchor);
+    return () => {
+      window.removeEventListener("wheel", cancelAnchor);
+      window.removeEventListener("touchmove", cancelAnchor);
+      window.removeEventListener("keydown", cancelAnchor);
+    };
   }, []);
 
   useEffect(() => {
@@ -333,6 +394,67 @@ export default function RouteFinder() {
     });
   }
 
+  function openAITravelPlan(routeId: string) {
+    setAiOriginRect(cardRefs.current.get(routeId)?.getBoundingClientRect() ?? null);
+    setAiRouteId(routeId);
+  }
+
+  function scrollCardToTop(element: HTMLElement, reduceMotion: boolean) {
+    const topInset = 12;
+    const target = Math.max(0, window.scrollY + element.getBoundingClientRect().top - topInset);
+    if (Math.abs(window.scrollY - target) < 1) return Promise.resolve();
+    window.scrollTo({ top: target, behavior: reduceMotion ? "auto" : "smooth" });
+    if (reduceMotion) return Promise.resolve();
+
+    return new Promise<void>((resolve) => {
+      const startedAt = performance.now();
+      let stableFrames = 0;
+      let previousY = window.scrollY;
+      const checkPosition = () => {
+        const currentY = window.scrollY;
+        const atTarget = Math.abs(currentY - target) < 1.5;
+        stableFrames = atTarget && Math.abs(currentY - previousY) < 0.5 ? stableFrames + 1 : 0;
+        previousY = currentY;
+        if (stableFrames >= 2 || performance.now() - startedAt > 720) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(checkPosition);
+      };
+      requestAnimationFrame(checkPosition);
+    });
+  }
+
+  async function toggleRoute(routeId: string, isOpen: boolean) {
+    const switchToken = ++routeSwitchToken.current;
+    if (closingTimer.current) clearTimeout(closingTimer.current);
+    if (isOpen) {
+      setClosingRouteId(routeId);
+      setExpanded(null);
+    } else {
+      const card = cardRefs.current.get(routeId);
+      if (card) {
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        await scrollCardToTop(card, reduceMotion);
+        if (routeSwitchToken.current !== switchToken) return;
+      }
+      if (expanded && expanded !== routeId) setClosingRouteId(expanded);
+      else setClosingRouteId(null);
+      if (card) {
+        expandAnchor.current = {
+          id: routeId,
+          top: card.getBoundingClientRect().top,
+          startedAt: performance.now(),
+        };
+      }
+      setExpanded(routeId);
+    }
+    closingTimer.current = setTimeout(() => {
+      setClosingRouteId(null);
+      closingTimer.current = null;
+    }, 500);
+  }
+
   function search() {
     setOrigin(draftOrigin);
     setDestination(draftDestination);
@@ -415,7 +537,10 @@ export default function RouteFinder() {
 
   return (
     <>
-    <main className={`planner ${quizOpen ? "preference-open" : ""}`} aria-hidden={quizOpen || undefined}>
+    <main
+      className={`planner ${quizOpen ? "preference-open" : ""} ${aiRoute ? "ai-workspace-open" : ""}`}
+      aria-hidden={quizOpen || Boolean(aiRoute) || undefined}
+    >
       <OriginalArtDefs />
       <header className="topbar">
         <a className="brand" href="#top" aria-label={copy.home}>
@@ -541,11 +666,12 @@ export default function RouteFinder() {
             <div className="route-list">
               {results.map((route, index) => {
                 const isOpen = expanded === route.id;
+                const keepDetailsMounted = isOpen || closingRouteId === route.id;
                 const ticket = ticketCopy(route, copy);
                 return (
                   <div className="route-motion" key={route.id} ref={(element) => { if (element) cardRefs.current.set(route.id, element); else cardRefs.current.delete(route.id); }}>
                   <article className={`route-card ${isOpen ? "open" : ""}`}>
-                    <button className="route-summary" type="button" onClick={() => setExpanded(isOpen ? null : route.id)} aria-expanded={isOpen}>
+                    <button className="route-summary" type="button" onClick={() => toggleRoute(route.id, isOpen)} aria-expanded={isOpen}>
                       <div className="rank">{index + 1}</div>
                       <div className="route-main">
                         <div className="route-codes">
@@ -593,7 +719,7 @@ export default function RouteFinder() {
                     </button>
 
                     <div className="route-details" aria-hidden={!isOpen}>
-                      {isOpen && <div className="details-inner">
+                      {keepDetailsMounted && <div className="details-inner" inert={!isOpen}>
                         <div className="warning-strip">
                           <span aria-hidden="true">!</span>
                           {route.ticketType === "multi-city" && <p>{copy.multiCityWarning}</p>}
@@ -628,6 +754,21 @@ export default function RouteFinder() {
                                 </div>
                               );
                             })}
+                          </div>
+                        )}
+                        {route.ticketType === "multi-city" && (
+                          <div className="ai-plan-entry">
+                            <div>
+                              <span aria-hidden="true">✦</span>
+                              <p>
+                                <strong>{locale === "zh" ? "生成中转城市行程" : locale === "ko" ? "스톱오버 일정 만들기" : locale === "ja" ? "乗り継ぎ旅程を作成" : "Build a stopover plan"}</strong>
+                                <small>{locale === "zh" ? "根据航班时间、停留天数与个人偏好规划" : locale === "ko" ? "항공편 시간, 체류 기간, 취향을 반영합니다" : locale === "ja" ? "フライト時刻、滞在日数、好みに合わせて作成します" : "Uses your flight times, stay length, and saved preferences"}</small>
+                              </p>
+                            </div>
+                            <button type="button" onClick={() => openAITravelPlan(route.id)}>
+                              {locale === "zh" ? "用 AI 规划" : locale === "ko" ? "AI로 계획" : locale === "ja" ? "AIで計画" : "Plan with AI"}
+                              <span aria-hidden="true">→</span>
+                            </button>
                           </div>
                         )}
                         <div className="flight-tickets">
@@ -694,6 +835,15 @@ export default function RouteFinder() {
         <p>{copy.footer}</p>
       </footer>
     </main>
+    {aiRoute && (
+      <AITravelWorkspace
+        route={aiRoute}
+        locale={locale}
+        preferences={travelPreferences ?? defaultTravelPreferences()}
+        originRect={aiOriginRect}
+        onClose={() => setAiRouteId(null)}
+      />
+    )}
     {quizOpen && (
       <div className="preference-overlay">
         <section
