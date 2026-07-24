@@ -4,5 +4,6 @@
 /dist
 /.wrangler
 /.env*
+!/.env.example
 *.log
 /work
