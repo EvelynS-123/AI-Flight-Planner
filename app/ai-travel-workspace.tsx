@@ -96,6 +96,8 @@ const COPY = {
     remove: "移除",
     replaceHotel: "更换住宿",
     duration: "建议停留",
+    price: "参考价格",
+    priceEstimated: "AI 估算价格",
     address: "地址",
     hours: "营业信息",
     source: "网页来源",
@@ -166,6 +168,8 @@ const COPY = {
     remove: "Remove",
     replaceHotel: "Change stay",
     duration: "Suggested visit",
+    price: "Est. price",
+    priceEstimated: "AI-estimated price",
     address: "Address",
     hours: "Hours",
     source: "Web source",
@@ -236,6 +240,8 @@ const COPY = {
     remove: "제거",
     replaceHotel: "숙소 변경",
     duration: "추천 체류",
+    price: "예상 가격",
+    priceEstimated: "AI 추정 가격",
     address: "주소",
     hours: "영업 정보",
     source: "웹 출처",
@@ -306,6 +312,8 @@ const COPY = {
     remove: "外す",
     replaceHotel: "宿泊先を変更",
     duration: "滞在目安",
+    price: "目安価格",
+    priceEstimated: "AI概算価格",
     address: "住所",
     hours: "営業時間",
     source: "ウェブ情報源",
@@ -549,21 +557,29 @@ function RecommendationCard({
         <span className="ai-rec-address">{copy.address} · {item.address}</span>
         <p>{item.details}</p>
       </div>
-      <div className="ai-rec-meta">
-        {item.category !== "hotel" && (
-          <>
-            <span>
-              {copy.duration} · {formatDuration(item.suggestedDurationMinutes, locale)}
-              {item.visitType ? ` · ${item.visitType}` : ""}
+      {(item.category !== "hotel" || item.estimatedPrice) && (
+        <div className="ai-rec-meta">
+          {item.category !== "hotel" && (
+            <>
+              <span>
+                {copy.duration} · {formatDuration(item.suggestedDurationMinutes, locale)}
+                {item.visitType ? ` · ${item.visitType}` : ""}
+              </span>
+              {item.durationRationale && <span>{item.durationRationale}</span>}
+              <span className={item.hoursConfidence === "unknown" ? "uncertain" : ""}>
+                {item.hoursConfidence === "unknown" ? copy.unknown : copy.verified}
+                {" · "}{item.openingHours}
+              </span>
+            </>
+          )}
+          {item.estimatedPrice && (item.category === "hotel" || item.category === "meal") && (
+            <span className={item.priceConfidence === "estimated" ? "uncertain" : ""}>
+              {item.priceConfidence === "estimated" ? copy.priceEstimated : copy.price}
+              {" · "}{item.estimatedPrice}
             </span>
-            {item.durationRationale && <span>{item.durationRationale}</span>}
-            <span className={item.hoursConfidence === "unknown" ? "uncertain" : ""}>
-              {item.hoursConfidence === "unknown" ? copy.unknown : copy.verified}
-              {" · "}{item.openingHours}
-            </span>
-          </>
-        )}
-      </div>
+          )}
+        </div>
+      )}
       <footer>
         <a href={item.sourceUrl} target="_blank" rel="noreferrer">
           {copy.source}<span aria-hidden="true">↗</span>
