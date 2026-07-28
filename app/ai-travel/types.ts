@@ -60,6 +60,8 @@ export type TravelRecommendation = {
   details: string;
   suggestedDurationMinutes: number;
   durationRationale: string;
+  estimatedPrice: string;
+  priceConfidence: "sourced" | "estimated";
   openingHours: string;
   openingStartMinute: number | null;
   openingEndMinute: number | null;

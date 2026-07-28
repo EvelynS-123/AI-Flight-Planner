@@ -424,6 +424,21 @@ function parseClockTimes(source: TravelSearchResult) {
   };
 }
 
+const PRICE_PATTERN = new RegExp(
+  "(?:¥|￥|\\$|₩|HK\\$|NT\\$|C\\$|US\\$)\\s?\\d[\\d,]*(?:\\.\\d+)?"
+  + "(?:\\s*[-–~〜至到]\\s*(?:¥|￥|\\$|₩|HK\\$|NT\\$|C\\$|US\\$)?\\s?\\d[\\d,]*(?:\\.\\d+)?)?"
+  + "|\\d[\\d,]*(?:\\.\\d+)?\\s?(?:円|元|원|港币|港元|人民币)"
+  + "(?:\\s*[-–~〜至到]\\s*\\d[\\d,]*(?:\\.\\d+)?\\s?(?:円|元|원|港币|港元|人民币))?",
+  "u",
+);
+
+function parsePriceFromSource(source: TravelSearchResult) {
+  const text = `${source.title} ${source.snippet}`.normalize("NFKC");
+  const match = text.match(PRICE_PATTERN);
+  if (!match) return null;
+  return { label: match[0].replace(/\s+/g, " ").trim().slice(0, 60) };
+}
+
 function durationFor(
   category: TravelRecommendationCategory,
   requested: unknown,
@@ -458,6 +473,9 @@ function recommendationFromSource(
 ): TravelRecommendation {
   const copy = COPY[request.locale];
   const hours = parseClockTimes(source);
+  const sourcedPrice = parsePriceFromSource(source);
+  const aiEstimatedPrice = safeText(raw?.estimatedPrice, "", 80);
+  const priceApplies = category === "hotel" || category === "meal";
   const title = sourceBackedTitle(raw?.title, source);
   return {
     id: `${category}-${source.id}`,
@@ -473,6 +491,8 @@ function recommendationFromSource(
       request.pace,
     ),
     durationRationale: safeText(raw?.durationRationale, "", 180),
+    estimatedPrice: priceApplies ? (sourcedPrice?.label || aiEstimatedPrice) : "",
+    priceConfidence: sourcedPrice ? "sourced" : "estimated",
     openingHours: hours?.label || copy.unknownHours,
     openingStartMinute: hours?.start ?? null,
     openingEndMinute: hours?.end ?? null,
@@ -572,6 +592,7 @@ export function buildRecommendationPrompt(
           details: "why it suits this user, no schedule",
           suggestedDurationMinutes: "realistic place-specific estimate in 15-minute increments",
           durationRationale: "short localized reason based on place scale and typical visit",
+          estimatedPrice: "for hotel or meal only, used only when the source text does not already state a price: a realistic average local-currency price range based on the venue's known tier, such as ¥600-900 per night or ¥80-150 per person; empty string for other categories",
           sourceId: "exact sourceId",
         }],
       }],
@@ -585,6 +606,7 @@ export function buildRecommendationPrompt(
       "Do not put transport or airport processes in recommendations.",
       "Do not assign start or end times.",
       "Use judgment rather than category-wide duration defaults.",
+      "Only fill in estimatedPrice for hotel and meal recommendations when the source text does not already contain a price; otherwise leave it empty and the server will use the source's own price.",
       "A reliable category or tourism page may support several recommendations; do not demand one URL per place.",
       "If this is a revision, apply the user's intent to the relevant choices and preserve unrelated choices when they still fit.",
     ],
@@ -605,6 +627,7 @@ export function buildRecommendationPrompt(
         details: item.details,
         suggestedDurationMinutes: item.suggestedDurationMinutes,
         durationRationale: item.durationRationale,
+        estimatedPrice: item.priceConfidence === "estimated" ? item.estimatedPrice : "",
       }))
     )) || null,
     stopovers: request.route.stopovers.map((stopover, index) => {
@@ -911,6 +934,8 @@ function recommendationPoolFingerprint(stopovers: StopoverRecommendationPool[]) 
       details: item.details,
       suggestedDurationMinutes: item.suggestedDurationMinutes,
       durationRationale: item.durationRationale,
+      estimatedPrice: item.estimatedPrice,
+      priceConfidence: item.priceConfidence,
     }))
   )));
 }
