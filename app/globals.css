@@ -77,12 +77,18 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 .select-field:focus-within { background: white; border-color: rgba(5, 103, 232, 0.35); }
 .select-field > span { color: var(--muted); font-size: 11px; font-weight: 650; }
 .select-field select { width: 100%; appearance: none; border: 0; outline: 0; color: var(--ink); background: transparent; font-weight: 680; cursor: pointer; }
+.select-field input { width: 100%; min-height: 22px; border: 0; outline: 0; color: var(--ink); background: transparent; font-weight: 680; cursor: pointer; }
 .swap-button { width: 44px; height: 44px; margin-bottom: 8px; border: 0; border-radius: 50%; color: #8c8f96; background: rgba(233, 236, 241, 0.8); cursor: not-allowed; }
 .search-button { min-height: 66px; padding: 0 22px; border: 0; border-radius: 999px; color: white; background: linear-gradient(135deg, #5a9cc0, #3a7ea8); box-shadow: 0 12px 22px rgba(58, 126, 168, 0.25); font-family: "Segoe Print", "Comic Sans MS", cursive; font-weight: 700; cursor: pointer; transition: transform 320ms var(--spring), filter 180ms ease, box-shadow 320ms var(--spring); }
 .search-button:hover { filter: brightness(1.04); box-shadow: 0 16px 30px rgba(5, 103, 232, 0.28); transform: translateY(-2px); }
 .search-button:active { transform: translateY(1px) scale(0.975); transition-duration: 80ms; }
+.search-button:disabled { opacity: 0.62; cursor: wait; filter: saturate(0.7); transform: none; }
 .search-note { display: flex; align-items: center; gap: 7px; margin: 13px 6px 1px; color: var(--muted); font-size: 12px; }
 .search-note span { color: var(--blue); font-size: 9px; }
+.search-note.ready { color: #487a61; }
+.search-note.ready span { color: #4f9270; }
+.search-note.fallback { color: #94633d; }
+.search-note.fallback span { color: #d58f42; }
 
 .results-section { width: 100%; min-width: 0; max-width: 1160px; margin: 0 auto; padding: 0 24px 90px; }
 .results-heading { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 22px; }

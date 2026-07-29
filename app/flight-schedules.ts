@@ -339,6 +339,15 @@ function makeStop(
 }
 
 function buildSchedule(route: RouteOption, requestedDays: number[] = []) {
+  if (route.liveSchedule) {
+    return {
+      scheduledTickets: route.liveSchedule.scheduledTickets,
+      scheduledStops: route.liveSchedule.scheduledStops,
+      totalDurationMinutes: route.liveSchedule.totalDurationMinutes,
+      selectedStopoverDays: route.liveSchedule.selectedStopoverDays,
+      dataValid: route.liveSchedule.dataValid,
+    };
+  }
   const scheduledTickets: ScheduledTicket[] = [];
   const scheduledStops: ScheduledStop[] = [];
   const selectedStopoverDays: number[] = [];

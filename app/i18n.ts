@@ -38,11 +38,15 @@ export type Copy = {
   from: string;
   to: string;
   month: string;
+  departureDate: string;
   august: string;
   september: string;
   search: string;
+  searchingFlights: string;
   swap: string;
   searchNote: string;
+  liveSearchReady: (time: string, cached: boolean) => string;
+  liveSearchFallback: string;
   routeIdeas: string;
   noRoute: string;
   weightAria: string;
@@ -57,6 +61,7 @@ export type Copy = {
   emptyBody: string;
   liveScore: string;
   sampleTotal: string;
+  liveTotal: string;
   via: string;
   direct: string;
   connection: string;
@@ -67,6 +72,7 @@ export type Copy = {
   connectionHub: string;
   multiCityHub: string;
   directWarning: string;
+  liveFareWarning: string;
   connectionWarning: string;
   multiCityWarning: string;
   totalDuration: string;
@@ -78,6 +84,8 @@ export type Copy = {
   fixedConnection: string;
   ticket: string;
   weeklySchedule: string;
+  liveSource: string;
+  liveFlight: string;
   operates: string;
   priceDate: string;
   oneWay: string;
@@ -124,6 +132,8 @@ export const COPY: Record<Locale, Copy> = {
     fixedConnection: "固定联程",
     ticket: "机票",
     weeklySchedule: "每周参考时刻",
+    liveSource: "查看实时来源",
+    liveFlight: "该日期的实时搜索结果",
     operates: "运行日",
     language: "语言",
     home: "Via 首页",
@@ -135,11 +145,15 @@ export const COPY: Record<Locale, Copy> = {
     from: "从哪里出发",
     to: "到哪里",
     month: "出行月份",
+    departureDate: "出发日期",
     august: "2026 年 8 月",
     september: "2026 年 9 月",
     search: "查找航线",
+    searchingFlights: "查询实时航班…",
     swap: "交换出发地和目的地",
     searchNote: "同时搜索直飞、联程与最多三段的组合路线，价格为单程美元快照，原币报价会在详情标注",
+    liveSearchReady: (time, cached) => `${cached ? "缓存" : "实时"}航班已核验 · ${time}`,
+    liveSearchFallback: "未取得 SerpApi 实时报价，正在显示本地价格快照。",
     routeIdeas: "路线灵感",
     noRoute: "当前样本里还没有这条路线",
     weightAria: "路线排序权重",
@@ -154,6 +168,7 @@ export const COPY: Record<Locale, Copy> = {
     emptyBody: "本 demo 聚焦 4 个数据较完整的东亚出发机场和 4 个北美西海岸到达机场。",
     liveScore: "实时得分",
     sampleTotal: "样本合计",
+    liveTotal: "当前报价",
     via: "经",
     direct: "直飞",
     connection: "联程票",
@@ -164,6 +179,7 @@ export const COPY: Record<Locale, Copy> = {
     connectionHub: "联程中转机场",
     multiCityHub: "Multicity 中转机场",
     directWarning: "这是直飞单程价格快照。航班计划与最终含税价格可能变化，请在出票页重新确认。",
+    liveFareWarning: "这是刚查询到的 Google Flights 单程报价；价格和可售状态仍可能变化，请在出票前重新核验。",
     connectionWarning: "这是同一次搜索里出现的端到端联程报价样本。实际是否同一票号、行李能否直挂及保护规则，仍要在出票页确认。",
     multiCityWarning: "这是分开出票的 Multicity 灵感组合。各段价格来自独立搜索快照，日期未必可直接衔接，行李通常也不会直挂。",
     priceDate: "价格日期",
@@ -209,6 +225,8 @@ export const COPY: Record<Locale, Copy> = {
     fixedConnection: "Fixed connection",
     ticket: "Ticket",
     weeklySchedule: "Weekly timetable",
+    liveSource: "View live source",
+    liveFlight: "Live result for this date",
     operates: "Operates",
     language: "Language",
     home: "Via home",
@@ -220,11 +238,15 @@ export const COPY: Record<Locale, Copy> = {
     from: "From",
     to: "To",
     month: "Travel month",
+    departureDate: "Departure date",
     august: "August 2026",
     september: "September 2026",
     search: "Find routes",
+    searchingFlights: "Checking live flights…",
     swap: "Swap origin and destination",
     searchNote: "Search nonstop, connecting, and up-to-three-segment options together. Prices are one-way USD snapshots; original currencies appear in details.",
+    liveSearchReady: (time, cached) => `${cached ? "Cached" : "Live"} flights checked · ${time}`,
+    liveSearchFallback: "SerpApi live fares were unavailable. Showing local price snapshots.",
     routeIdeas: "ROUTE IDEAS",
     noRoute: "No route is available in the current sample",
     weightAria: "Route ranking weights",
@@ -239,6 +261,7 @@ export const COPY: Record<Locale, Copy> = {
     emptyBody: "This demo focuses on four well-covered East Asian origins and four North American West Coast destinations.",
     liveScore: "Live score",
     sampleTotal: "Sample total",
+    liveTotal: "Current fare",
     via: "via",
     direct: "Nonstop",
     connection: "Connecting",
@@ -249,6 +272,7 @@ export const COPY: Record<Locale, Copy> = {
     connectionHub: "Connecting airport",
     multiCityHub: "Multi-city stop",
     directWarning: "This is a one-way nonstop fare snapshot. Schedules and final tax-inclusive prices may change; reconfirm on the booking page.",
+    liveFareWarning: "This is a newly queried Google Flights one-way fare. Price and availability may still change; recheck before booking.",
     connectionWarning: "This end-to-end connecting fare appeared in one search. Confirm the ticket number, through-checked baggage, and disruption protection on the booking page.",
     multiCityWarning: "This is a multi-city idea built from separately ticketed one-way fares. Segment prices come from independent snapshots, dates may not connect, and baggage usually will not be checked through.",
     priceDate: "Fare date",
@@ -294,6 +318,8 @@ export const COPY: Record<Locale, Copy> = {
     fixedConnection: "고정 환승",
     ticket: "항공권",
     weeklySchedule: "주간 참고 시간표",
+    liveSource: "실시간 출처 보기",
+    liveFlight: "선택한 날짜의 실시간 결과",
     operates: "운항일",
     language: "언어",
     home: "Via 홈",
@@ -305,11 +331,15 @@ export const COPY: Record<Locale, Copy> = {
     from: "출발지",
     to: "도착지",
     month: "여행 월",
+    departureDate: "출발일",
     august: "2026년 8월",
     september: "2026년 9월",
     search: "노선 찾기",
+    searchingFlights: "실시간 항공편 확인 중…",
     swap: "출발지와 도착지 바꾸기",
     searchNote: "직항, 연결편, 최대 3구간 조합을 함께 검색합니다. 가격은 편도 미화 스냅샷이며 원화가 아닌 원래 통화는 상세 정보에 표시됩니다.",
+    liveSearchReady: (time, cached) => `${cached ? "캐시" : "실시간"} 항공편 확인 · ${time}`,
+    liveSearchFallback: "SerpApi 실시간 운임을 가져오지 못해 로컬 가격 스냅샷을 표시합니다.",
     routeIdeas: "추천 노선",
     noRoute: "현재 샘플에는 이 노선이 없습니다",
     weightAria: "노선 순위 가중치",
@@ -324,6 +354,7 @@ export const COPY: Record<Locale, Copy> = {
     emptyBody: "이 데모는 데이터가 비교적 충분한 동아시아 출발 공항 4곳과 북미 서해안 도착 공항 4곳에 집중합니다.",
     liveScore: "실시간 점수",
     sampleTotal: "샘플 합계",
+    liveTotal: "현재 운임",
     via: "경유",
     direct: "직항",
     connection: "연결편",
@@ -334,6 +365,7 @@ export const COPY: Record<Locale, Copy> = {
     connectionHub: "연결편 환승 공항",
     multiCityHub: "다구간 경유 공항",
     directWarning: "직항 편도 운임 스냅샷입니다. 운항 일정과 최종 세금 포함 가격은 바뀔 수 있으니 예약 페이지에서 다시 확인하세요.",
+    liveFareWarning: "방금 조회한 Google Flights 편도 운임입니다. 가격과 좌석은 바뀔 수 있으니 예약 전에 다시 확인하세요.",
     connectionWarning: "한 번의 검색에 표시된 출발지-도착지 연결편 운임 예시입니다. 동일 티켓 번호 여부, 수하물 연결, 지연·결항 보호 규정은 발권 페이지에서 확인하세요.",
     multiCityWarning: "별도 발권한 편도 운임을 조합한 다구간 아이디어입니다. 구간별 가격은 서로 다른 검색 스냅샷이며 날짜가 이어지지 않을 수 있고 수하물도 보통 자동 연결되지 않습니다.",
     priceDate: "운임 날짜",
@@ -379,6 +411,8 @@ export const COPY: Record<Locale, Copy> = {
     fixedConnection: "固定乗り継ぎ",
     ticket: "航空券",
     weeklySchedule: "週間参考時刻表",
+    liveSource: "リアルタイム出典",
+    liveFlight: "選択日のリアルタイム結果",
     operates: "運航日",
     language: "言語",
     home: "Via ホーム",
@@ -390,11 +424,15 @@ export const COPY: Record<Locale, Copy> = {
     from: "出発地",
     to: "目的地",
     month: "旅行月",
+    departureDate: "出発日",
     august: "2026年8月",
     september: "2026年9月",
     search: "ルートを検索",
+    searchingFlights: "リアルタイム便を確認中…",
     swap: "出発地と目的地を入れ替える",
     searchNote: "直行便、乗継便、最大3区間の組み合わせをまとめて検索します。価格は片道米ドルのスナップショットで、元通貨は詳細に表示します。",
+    liveSearchReady: (time, cached) => `${cached ? "キャッシュ" : "リアルタイム"}便を確認 · ${time}`,
+    liveSearchFallback: "SerpApiのリアルタイム運賃を取得できないため、ローカルの価格スナップショットを表示しています。",
     routeIdeas: "ルート候補",
     noRoute: "現在のサンプルにはこのルートがありません",
     weightAria: "ルート順位の重み",
@@ -409,6 +447,7 @@ export const COPY: Record<Locale, Copy> = {
     emptyBody: "このデモは、データが比較的充実した東アジアの出発空港4か所と北米西海岸の到着空港4か所に絞っています。",
     liveScore: "リアルタイム評価",
     sampleTotal: "サンプル合計",
+    liveTotal: "現在の運賃",
     via: "経由",
     direct: "直行便",
     connection: "乗継便",
@@ -419,6 +458,7 @@ export const COPY: Record<Locale, Copy> = {
     connectionHub: "乗継空港",
     multiCityHub: "周遊の経由空港",
     directWarning: "直行便の片道運賃スナップショットです。運航予定と最終的な税込価格は変動するため、予約ページで再確認してください。",
+    liveFareWarning: "Google Flightsで直近に取得した片道運賃です。価格と空席状況は変動するため、予約前に再確認してください。",
     connectionWarning: "1回の検索に表示された出発地から目的地までの乗継運賃例です。同一航空券か、手荷物を通しで預けられるか、遅延・欠航時の保護条件を予約ページで確認してください。",
     multiCityWarning: "別発券の片道運賃を組み合わせた周遊ルート案です。区間価格は別々の検索スナップショットで、日程がつながらない場合があり、手荷物も通常は通しで預けられません。",
     priceDate: "運賃日",
