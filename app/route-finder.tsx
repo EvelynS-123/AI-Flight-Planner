@@ -6,6 +6,9 @@ import { DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, ROUTES, mov
 import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./flight-schedules";
 import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
 import AITravelWorkspace from "./ai-travel-workspace";
+import { clampDepartureDate, departureDateRange, type DepartureDateRange } from "./departure-date-range";
+import { liveRouteOptions } from "./flights/route-options";
+import type { LiveFlightSearchResult } from "./flights/types";
 import {
   DEFAULT_PREFERENCE_LEVELS,
   FAVORITE_CITY_LIMIT,
@@ -22,6 +25,13 @@ import {
 } from "./travel-preferences";
 
 const SCORE_NUMBER_PLUGINS = [continuous];
+const DEFAULT_DEPARTURE_DATE = "2026-09-15";
+
+type FlightSearchState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; result: LiveFlightSearchResult }
+  | { status: "fallback"; code?: string };
 
 function OriginalArtDefs() {
   return (
@@ -127,7 +137,10 @@ export default function RouteFinder() {
   const [destination, setDestination] = useState<AirportCode>("LAX");
   const [draftOrigin, setDraftOrigin] = useState<AirportCode>("PVG");
   const [draftDestination, setDraftDestination] = useState<AirportCode>("LAX");
-  const [month, setMonth] = useState<"Aug" | "Sep">("Sep");
+  const [departureDate, setDepartureDate] = useState(DEFAULT_DEPARTURE_DATE);
+  const [draftDepartureDate, setDraftDepartureDate] = useState(DEFAULT_DEPARTURE_DATE);
+  const [selectableDepartureDates, setSelectableDepartureDates] = useState<DepartureDateRange | null>(null);
+  const [flightSearch, setFlightSearch] = useState<FlightSearchState>({ status: "idle" });
   const [weights, setWeights] = useState<RouteWeights>({ price: 30, interest: 35, directness: 35 });
   const [stopoverSelections, setStopoverSelections] = useState<StopoverSelections>({});
   const [travelPreferences, setTravelPreferences] = useState<TravelPreferenceState | null>(null);
@@ -144,6 +157,7 @@ export default function RouteFinder() {
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
   const closingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeSwitchToken = useRef(0);
+  const flightSearchToken = useRef(0);
   const expandAnchor = useRef<{ id: string; top: number; startedAt: number } | null>(null);
   const expandAnchorFrame = useRef<number | null>(null);
   const previousScrollBehavior = useRef("");
@@ -158,6 +172,14 @@ export default function RouteFinder() {
   const quizPanelRef = useRef<HTMLElement>(null);
   const copy = COPY[locale];
   const localeOption = LOCALE_OPTIONS.find((item) => item.code === locale)!;
+  const month: "Aug" | "Sep" = departureDate.slice(5, 7) === "08" ? "Aug" : "Sep";
+
+  useEffect(() => {
+    const range = departureDateRange();
+    setSelectableDepartureDates(range);
+    setDepartureDate((current) => clampDepartureDate(current, range));
+    setDraftDepartureDate((current) => clampDepartureDate(current, range));
+  }, []);
 
   const personalizedAttractiveness = useMemo(
     () => travelPreferences?.mode === "personalized" ? buildPersonalizedAttractiveness(travelPreferences) : undefined,
@@ -165,14 +187,30 @@ export default function RouteFinder() {
   );
 
   const results = useMemo(() => {
-    const matched = ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
+    const snapshots = ROUTES.filter((route) => (
+      route.origin === origin
+      && route.destination === destination
+      && route.months.includes(month)
+    ));
+    const liveResult = flightSearch.status === "ready"
+      && flightSearch.result.request.origin === origin
+      && flightSearch.result.request.destination === destination
+      && flightSearch.result.request.departureDate === departureDate
+      ? liveRouteOptions(flightSearch.result, month)
+      : null;
+    const matched = liveResult
+      ? [
+        ...liveResult,
+        ...snapshots.filter((route) => route.ticketType === "multi-city"),
+      ]
+      : snapshots;
     const scored = scoreRoutes(matched, weights, stopoverSelections, personalizedAttractiveness);
     if (isDraggingWeights && dragOrder.current) {
       const positions = new Map(dragOrder.current.map((id, index) => [id, index]));
       return scored.sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
     }
     return scored.sort((a, b) => b.scores.total - a.scores.total || a.total - b.total);
-  }, [origin, destination, month, weights, stopoverSelections, personalizedAttractiveness, isDraggingWeights]);
+  }, [origin, destination, departureDate, month, weights, stopoverSelections, personalizedAttractiveness, isDraggingWeights, flightSearch]);
 
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
@@ -455,11 +493,51 @@ export default function RouteFinder() {
     }, 500);
   }
 
-  function search() {
-    setOrigin(draftOrigin);
-    setDestination(draftDestination);
+  async function search() {
+    const nextOrigin = draftOrigin;
+    const nextDestination = draftDestination;
+    const nextDepartureDate = draftDepartureDate;
+    const token = ++flightSearchToken.current;
+    setOrigin(nextOrigin);
+    setDestination(nextDestination);
+    setDepartureDate(nextDepartureDate);
     setExpanded(null);
     setSearched(true);
+    setFlightSearch({ status: "loading" });
+    try {
+      const response = await fetch("/api/flights/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          origin: nextOrigin,
+          destination: nextDestination,
+          departureDate: nextDepartureDate,
+          adults: 1,
+          currency: "USD",
+        }),
+      });
+      const payload = await response.json() as LiveFlightSearchResult & {
+        error?: string;
+        code?: string;
+      };
+      if (!response.ok) {
+        const error = new Error(payload.error || "Flight search failed.") as Error & {
+          code?: string;
+        };
+        error.code = payload.code;
+        throw error;
+      }
+      if (token !== flightSearchToken.current) return;
+      setFlightSearch({ status: "ready", result: payload });
+    } catch (error) {
+      if (token !== flightSearchToken.current) return;
+      setFlightSearch({
+        status: "fallback",
+        code: error instanceof Error && "code" in error
+          ? String((error as Error & { code?: string }).code || "")
+          : undefined,
+      });
+    }
   }
 
   function swap() {
@@ -587,15 +665,41 @@ export default function RouteFinder() {
               </select>
             </label>
             <label className="select-field month-field">
-              <span>{copy.month}</span>
-              <select aria-label={copy.month} value={month} onChange={(event) => setMonth(event.target.value as "Aug" | "Sep")}>
-                <option value="Aug">{copy.august}</option>
-                <option value="Sep">{copy.september}</option>
-              </select>
+              <span>{copy.departureDate}</span>
+              <input
+                aria-label={copy.departureDate}
+                type="date"
+                min={selectableDepartureDates?.min}
+                max={selectableDepartureDates?.max}
+                value={draftDepartureDate}
+                onChange={(event) => setDraftDepartureDate(event.target.value)}
+              />
             </label>
-            <button className="search-button" type="button" onClick={search}>{copy.search}</button>
+            <button
+              className="search-button"
+              type="button"
+              onClick={search}
+              disabled={flightSearch.status === "loading"}
+            >
+              {flightSearch.status === "loading" ? copy.searchingFlights : copy.search}
+            </button>
           </div>
-          <p className="search-note"><span aria-hidden="true">◉</span> {copy.searchNote}</p>
+          <p className={`search-note ${flightSearch.status}`}>
+            <span aria-hidden="true">◉</span>
+            {flightSearch.status === "ready"
+              ? copy.liveSearchReady(
+                new Intl.DateTimeFormat(localeOption.intl, {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }).format(new Date(flightSearch.result.searchedAt)),
+                flightSearch.result.cached,
+              )
+              : flightSearch.status === "fallback"
+                ? copy.liveSearchFallback
+                : flightSearch.status === "loading"
+                  ? copy.searchingFlights
+                  : copy.searchNote}
+          </p>
         </div>
       </section>
 
@@ -712,7 +816,7 @@ export default function RouteFinder() {
                         </strong>
                       </div>
                       <div className="price-block">
-                        <span>{copy.sampleTotal}</span>
+                        <span>{route.liveSchedule ? copy.liveTotal : copy.sampleTotal}</span>
                         <strong>${route.total.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })}</strong>
                       </div>
                       <span className="disclosure" aria-hidden="true">⌄</span>
@@ -723,8 +827,8 @@ export default function RouteFinder() {
                         <div className="warning-strip">
                           <span aria-hidden="true">!</span>
                           {route.ticketType === "multi-city" && <p>{copy.multiCityWarning}</p>}
-                          {route.ticketType === "connection" && <p>{copy.connectionWarning}</p>}
-                          {route.ticketType === "direct" && <p>{copy.directWarning}</p>}
+                          {route.ticketType === "connection" && <p>{route.liveSchedule ? copy.liveFareWarning : copy.connectionWarning}</p>}
+                          {route.ticketType === "direct" && <p>{route.liveSchedule ? copy.liveFareWarning : copy.directWarning}</p>}
                         </div>
                         {route.scheduledStops.length > 0 && (
                           <div className="stopover-plans">
@@ -799,8 +903,14 @@ export default function RouteFinder() {
                                       </div>
                                     </div>
                                     <div className="schedule-reference">
-                                      <a href={flight.scheduleSource} target="_blank" rel="noreferrer">{copy.weeklySchedule} ↗</a>
-                                      <small>{copy.operates} {localizeWeekdays(flight.operatingDays, locale)}</small>
+                                      <a href={flight.scheduleSource} target="_blank" rel="noreferrer">
+                                        {route.liveSchedule ? copy.liveSource : copy.weeklySchedule} ↗
+                                      </a>
+                                      <small>
+                                        {route.liveSchedule
+                                          ? copy.liveFlight
+                                          : `${copy.operates} ${localizeWeekdays(flight.operatingDays, locale)}`}
+                                      </small>
                                     </div>
                                   </div>
                                 ))}

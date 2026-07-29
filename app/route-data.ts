@@ -1,4 +1,5 @@
 import { scoreScheduledRoutes, type StopoverSelections } from "./flight-schedules.ts";
+import type { ScheduledStop, ScheduledTicket } from "./flight-schedules.ts";
 
 export type AirportCode = "PVG" | "PEK" | "HKG" | "TPE" | "ICN" | "KIX" | "NRT" | "LAX" | "SFO" | "SEA" | "YVR";
 
@@ -23,6 +24,15 @@ export type RouteOption = {
   months: Array<"Aug" | "Sep">;
   segments: Segment[];
   total: number;
+  liveSchedule?: {
+    searchedAt: string;
+    currency: string;
+    scheduledTickets: ScheduledTicket[];
+    scheduledStops: ScheduledStop[];
+    totalDurationMinutes: number;
+    selectedStopoverDays: number[];
+    dataValid: boolean;
+  };
 };
 
 export type RouteWeights = {

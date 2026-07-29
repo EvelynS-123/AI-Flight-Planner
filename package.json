@@ -9,7 +9,7 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --experimental-strip-types --test tests/routes.test.mjs"
+    "test": "npm run build && node --experimental-strip-types --test tests/routes.test.mjs tests/serpapi.test.mjs tests/departure-date-range.test.mjs"
   },
   "dependencies": {
     "@number-flow/react": "^0.6.2",
