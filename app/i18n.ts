@@ -76,6 +76,7 @@ export type Copy = {
   playDays: string;
   daysOption: (days: number) => string;
   fixedConnection: string;
+  selfTransfer: string;
   ticket: string;
   weeklySchedule: string;
   operates: string;
@@ -142,6 +143,7 @@ export const COPY: Record<Locale, Copy> = {
     playDays: "在中转地玩几天",
     daysOption: (days) => days === 0 ? "当天继续" : `${days} 天`,
     fixedConnection: "固定联程",
+    selfTransfer: "自行衔接",
     ticket: "机票",
     weeklySchedule: "每周参考时刻",
     operates: "运行日",
@@ -185,7 +187,7 @@ export const COPY: Record<Locale, Copy> = {
     multiCityHub: "Multicity 中转机场",
     directWarning: "这是直飞单程价格快照。航班计划与最终含税价格可能变化，请在出票页重新确认。",
     connectionWarning: "这是同一次搜索里出现的端到端联程报价样本。实际是否同一票号、行李能否直挂及保护规则，仍要在出票页确认。",
-    multiCityWarning: "这是分开出票的 Multicity 灵感组合。各段价格来自独立搜索快照，日期未必可直接衔接，行李通常也不会直挂。",
+    multiCityWarning: "这是由多张独立机票组成的 Multicity 组合。每张票内的联程按同一搜索结果展示，两张票之间需要自行衔接，行李和误机保障通常不会贯通。请在出票页确认具体条件。",
     priceDate: "价格日期",
     oneWay: "单程",
     view: "查看",
@@ -247,6 +249,7 @@ export const COPY: Record<Locale, Copy> = {
     playDays: "Days to explore",
     daysOption: (days) => days === 0 ? "Continue the same day" : `${days} ${days === 1 ? "day" : "days"}`,
     fixedConnection: "Fixed connection",
+    selfTransfer: "Self-transfer",
     ticket: "Ticket",
     weeklySchedule: "Weekly timetable",
     operates: "Operates",
@@ -290,7 +293,7 @@ export const COPY: Record<Locale, Copy> = {
     multiCityHub: "Multi-city stop",
     directWarning: "This is a one-way nonstop fare snapshot. Schedules and final tax-inclusive prices may change; reconfirm on the booking page.",
     connectionWarning: "This end-to-end connecting fare appeared in one search. Confirm the ticket number, through-checked baggage, and disruption protection on the booking page.",
-    multiCityWarning: "This is a multi-city idea built from separately ticketed one-way fares. Segment prices come from independent snapshots, dates may not connect, and baggage usually will not be checked through.",
+    multiCityWarning: "This Multicity option combines separate tickets. Connections inside each ticket come from one search result; between tickets you must self-transfer, and baggage or disruption protection usually will not carry through. Confirm the terms before booking.",
     priceDate: "Fare date",
     oneWay: "One way",
     view: "View",
@@ -352,6 +355,7 @@ export const COPY: Record<Locale, Copy> = {
     playDays: "경유지 체류 일수",
     daysOption: (days) => days === 0 ? "당일 계속 이동" : `${days}일`,
     fixedConnection: "고정 환승",
+    selfTransfer: "자가 환승",
     ticket: "항공권",
     weeklySchedule: "주간 참고 시간표",
     operates: "운항일",
@@ -395,7 +399,7 @@ export const COPY: Record<Locale, Copy> = {
     multiCityHub: "다구간 경유 공항",
     directWarning: "직항 편도 운임 스냅샷입니다. 운항 일정과 최종 세금 포함 가격은 바뀔 수 있으니 예약 페이지에서 다시 확인하세요.",
     connectionWarning: "한 번의 검색에 표시된 출발지-도착지 연결편 운임 예시입니다. 동일 티켓 번호 여부, 수하물 연결, 지연·결항 보호 규정은 발권 페이지에서 확인하세요.",
-    multiCityWarning: "별도 발권한 편도 운임을 조합한 다구간 아이디어입니다. 구간별 가격은 서로 다른 검색 스냅샷이며 날짜가 이어지지 않을 수 있고 수하물도 보통 자동 연결되지 않습니다.",
+    multiCityWarning: "여러 장의 독립 항공권을 결합한 Multicity 조합입니다. 각 항공권 안의 환승은 하나의 검색 결과이며, 항공권 사이에서는 자가 환승이 필요합니다. 수하물과 지연 보상은 보통 이어지지 않으므로 예약 전에 조건을 확인하세요.",
     priceDate: "운임 날짜",
     oneWay: "편도",
     view: "보기",
@@ -457,6 +461,7 @@ export const COPY: Record<Locale, Copy> = {
     playDays: "経由地で過ごす日数",
     daysOption: (days) => days === 0 ? "当日中に出発" : `${days}日`,
     fixedConnection: "固定乗り継ぎ",
+    selfTransfer: "セルフ乗り継ぎ",
     ticket: "航空券",
     weeklySchedule: "週間参考時刻表",
     operates: "運航日",
@@ -500,7 +505,7 @@ export const COPY: Record<Locale, Copy> = {
     multiCityHub: "トランジット観光の経由空港",
     directWarning: "直行便の片道運賃スナップショットです。運航予定と最終的な税込価格は変動するため、予約ページで再確認してください。",
     connectionWarning: "1回の検索に表示された出発地から目的地までの乗継運賃例です。同一航空券かどうか、手荷物のスルーチェックイン可否、遅延・欠航時の保護規定は予約ページでご確認ください。",
-    multiCityWarning: "別発券の片道運賃を組み合わせたトランジット観光ルート案です。区間価格は別々の検索スナップショットで、日程がつながらない場合があり、手荷物も通常は通しで預けられません。",
+    multiCityWarning: "複数の独立した航空券を組み合わせたMulticityです。各航空券内の乗り継ぎは同じ検索結果ですが、航空券の間はセルフ乗り継ぎとなり、手荷物や遅延時の保護は通常引き継がれません。予約前に条件を確認してください。",
     priceDate: "運賃取得日",
     oneWay: "片道",
     view: "詳細",

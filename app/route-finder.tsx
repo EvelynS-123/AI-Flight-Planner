@@ -2,64 +2,26 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import NumberFlow, { continuous } from "@number-flow/react";
-import { ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
+import { ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteWeights } from "./route-data";
 import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./flight-schedules";
 import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
 import AITravelWorkspace from "./ai-travel-workspace";
 import { FlightChat } from "./flight-chat";
 import type { FlightResult } from "./flight-results";
-import { groupFlightResults, ticketTypeForFlight, type FlightResultGroup } from "./flights/group-results";
+import {
+  groupFlightResults,
+  mapLiveFlightGroupsToRouteOptions,
+  maxUsableStopoverMinutesForFlight,
+  type FlightResultGroup,
+} from "./flights/group-results";
 
 type LiveSearchContext = Record<string, unknown>;
 
-function mapLiveFlightGroupsToRouteOptions(
-  groups: FlightResultGroup[],
-  selections: Record<string, string>,
-): RouteOption[] {
-  return groups.map((group) => {
-    const f = group.variants.find((variant) => variant.id === selections[group.id])
-      ?? group.variants.find((variant) => variant.id === group.defaultVariantId)
-      ?? group.variants[0];
-    const dateStr = f.departureTime.split(" ")[0]; // "2026-12-01"
-    const [year, mm] = dateStr.split("-");
-    const monthKey = `${year}-${mm}`; // "2026-12"
-    return {
-      id: group.id,
-      origin: f.origin as AirportCode,
-      destination: f.destination as AirportCode,
-      hubs: f.stopAirports,
-      ticketType: ticketTypeForFlight(f),
-      stopCount: f.stops,
-      months: [monthKey],
-      total: f.price,
-      segments: [
-        {
-          from: f.origin,
-          to: f.destination,
-          price: f.price,
-          date: dateStr,
-          airline: f.airline,
-          source: f.bookingUrl ? "Google Flights" : "Mock Data",
-          url: f.bookingUrl,
-          stops: f.stops
-        }
-      ],
-      liveFlights: f.flights,
-      airportNames: f.airportNames,
-    };
-  });
-}
-
 function liveFlightOptionLabel(flight: FlightResult, locale: Locale): string {
-  const [date, time = ""] = flight.departureTime.split(" ");
-  const [year, month, day] = date.split("-").map(Number);
-  const intl = LOCALE_OPTIONS.find((item) => item.code === locale)?.intl ?? "en-US";
-  const dateLabel = Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)
-    ? new Intl.DateTimeFormat(intl, { month: "short", day: "numeric", weekday: "short" })
-        .format(new Date(Date.UTC(year, month - 1, day)))
-    : date;
+  const [, time = ""] = flight.departureTime.split(" ");
   const flightNumber = flight.flightNumbers.join(" · ");
-  return `${dateLabel} · ${time} · ${flightNumber} · $${flight.price}`;
+  const usableMinutes = maxUsableStopoverMinutesForFlight(flight);
+  return `${time} · ${flightNumber} · $${flight.price} · ${COPY[locale].usableTime} ${localizeDuration(usableMinutes, locale)}`;
 }
 
 function liveFlightPickerCopy(locale: Locale) {
@@ -261,6 +223,8 @@ export default function RouteFinder() {
   const previousScrollBehavior = useRef("");
   const previousPositions = useRef(new Map<string, number>());
   const reorderAnimations = useRef(new Map<string, Animation>());
+  const variantAnchor = useRef<{ id: string; top: number } | null>(null);
+  const anchoredRouteForLayout = useRef<string | null>(null);
   const allocationBarRef = useRef<HTMLDivElement>(null);
   const activeBoundary = useRef<"price-interest" | "interest-directness" | null>(null);
   const dragOrder = useRef<string[] | null>(null);
@@ -315,9 +279,28 @@ export default function RouteFinder() {
   const handlesAreColliding = weights.interest <= 4;
 
   useLayoutEffect(() => {
+    const anchor = variantAnchor.current;
+    if (!anchor) return;
+    const element = cardRefs.current.get(anchor.id);
+    if (!element) {
+      variantAnchor.current = null;
+      return;
+    }
+
+    reorderAnimations.current.get(anchor.id)?.cancel();
+    const delta = element.getBoundingClientRect().top - anchor.top;
+    if (Math.abs(delta) > 0.25) {
+      window.scrollTo({ top: window.scrollY + delta, behavior: "auto" });
+    }
+    anchoredRouteForLayout.current = anchor.id;
+    variantAnchor.current = null;
+  }, [results]);
+
+  useLayoutEffect(() => {
     if (isDraggingWeights) return;
     const nextPositions = new Map<string, number>();
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const anchoredRouteId = anchoredRouteForLayout.current;
 
     for (const [id, element] of cardRefs.current) {
       const transform = getComputedStyle(element).transform;
@@ -331,6 +314,7 @@ export default function RouteFinder() {
       if (Math.abs(delta) < 1) continue;
 
       reorderAnimations.current.get(id)?.cancel();
+      if (id === anchoredRouteId) continue;
       if (reduceMotion) continue;
 
       // Keep the card at its current presentation position, even if the user
@@ -348,6 +332,7 @@ export default function RouteFinder() {
       };
     }
     previousPositions.current = nextPositions;
+    anchoredRouteForLayout.current = null;
   }, [results, isDraggingWeights]);
 
   useLayoutEffect(() => {
@@ -394,6 +379,7 @@ export default function RouteFinder() {
   useEffect(() => {
     const cancelAnchor = () => {
       routeSwitchToken.current += 1;
+      variantAnchor.current = null;
       if (!expandAnchor.current) return;
       expandAnchor.current = null;
       if (expandAnchorFrame.current !== null) cancelAnimationFrame(expandAnchorFrame.current);
@@ -632,6 +618,10 @@ export default function RouteFinder() {
   }
 
   function selectLiveFlightVariant(groupId: string, flightId: string) {
+    const card = cardRefs.current.get(groupId);
+    if (card) {
+      variantAnchor.current = { id: groupId, top: card.getBoundingClientRect().top };
+    }
     setSelectedLiveFlightIds((current) => ({ ...current, [groupId]: flightId }));
   }
 
@@ -950,6 +940,9 @@ export default function RouteFinder() {
                     (flight) => flight.departureTime.slice(0, 10) === selectedVariantDate,
                   )
                   : [];
+                const selectedVariant = variantsForDate.find(
+                  (flight) => flight.id === selectedLiveFlightIds[route.id],
+                ) ?? variantsForDate[0];
                 const variantIsLoading = Boolean(variantLoading[route.id]);
                 const variantHasError = Boolean(variantErrors[route.id]);
                 const variantDateMin = typeof liveSearchContext?.dateRangeStart === "string"
@@ -1017,37 +1010,47 @@ export default function RouteFinder() {
                               <strong>{pickerCopy.count(variantsForDate.length)}</strong>
                               <small>{pickerCopy.cost(route.ticketType === "multi-city")}</small>
                             </div>
-                            <label>
+                            <label className="variant-field">
                               <span>{pickerCopy.dateLabel}</span>
-                              <input
-                                type="date"
-                                min={variantDateMin}
-                                max={variantDateMax}
-                                value={selectedVariantDate}
-                                disabled={variantIsLoading}
-                                onChange={(event) => {
-                                  void selectLiveFlightDate(route.id, event.target.value);
-                                }}
-                              />
+                              <span className={`variant-control date-control ${variantIsLoading ? "disabled" : ""}`}>
+                                <span className="variant-control-icon" aria-hidden="true" />
+                                <strong>{localizeDateLabel(selectedVariantDate, locale)}</strong>
+                                <span className="variant-control-disclosure" aria-hidden="true">⌄</span>
+                                <input
+                                  className="variant-native-control"
+                                  type="date"
+                                  min={variantDateMin}
+                                  max={variantDateMax}
+                                  value={selectedVariantDate}
+                                  disabled={variantIsLoading}
+                                  onChange={(event) => {
+                                    void selectLiveFlightDate(route.id, event.target.value);
+                                  }}
+                                />
+                              </span>
                             </label>
-                            <label>
+                            <label className="variant-field">
                               <span>{pickerCopy.timeLabel}</span>
-                              <select
-                                aria-label={`${pickerCopy.timeLabel} · ${route.origin} → ${route.destination}`}
-                                value={variantsForDate.some(
-                                  (flight) => flight.id === selectedLiveFlightIds[route.id],
-                                )
-                                  ? selectedLiveFlightIds[route.id]
-                                  : variantsForDate[0]?.id ?? ""}
-                                disabled={variantIsLoading || variantsForDate.length === 0}
-                                onChange={(event) => selectLiveFlightVariant(route.id, event.target.value)}
-                              >
-                                {variantsForDate.map((flight) => (
-                                  <option key={flight.id} value={flight.id}>
-                                    {liveFlightOptionLabel(flight, locale)}
-                                  </option>
-                                ))}
-                              </select>
+                              <span className={`variant-control time-control ${variantIsLoading || !selectedVariant ? "disabled" : ""}`}>
+                                <span className="variant-control-icon" aria-hidden="true" />
+                                <strong title={selectedVariant ? liveFlightOptionLabel(selectedVariant, locale) : undefined}>
+                                  {selectedVariant ? liveFlightOptionLabel(selectedVariant, locale) : pickerCopy.empty}
+                                </strong>
+                                <span className="variant-control-disclosure" aria-hidden="true">⌄</span>
+                                <select
+                                  className="variant-native-control"
+                                  aria-label={`${pickerCopy.timeLabel} · ${route.origin} → ${route.destination}`}
+                                  value={selectedVariant?.id ?? ""}
+                                  disabled={variantIsLoading || variantsForDate.length === 0}
+                                  onChange={(event) => selectLiveFlightVariant(route.id, event.target.value)}
+                                >
+                                  {variantsForDate.map((flight) => (
+                                    <option key={flight.id} value={flight.id}>
+                                      {liveFlightOptionLabel(flight, locale)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </span>
                             </label>
                             <div className="live-variant-status" aria-live="polite">
                               {variantIsLoading
@@ -1091,7 +1094,7 @@ export default function RouteFinder() {
                                     <strong>{airportCity(stop.airport, locale, route.airportNames?.[stop.airport])} · {localizeDuration(stop.durationMinutes, locale)}</strong>
                                     <small>{copy.usableTime} {localizeDuration(stop.usableMinutes, locale)}</small>
                                   </div>
-                                  {stop.kind === "multi-city" ? (
+                                  {stop.kind === "multi-city" && stop.options.length > 0 ? (
                                     <label className="stay-selector">
                                       <span>{copy.playDays}</span>
                                       <select
@@ -1102,6 +1105,8 @@ export default function RouteFinder() {
                                         {stop.options.map((days) => <option key={days} value={days}>{copy.daysOption(days)}</option>)}
                                       </select>
                                     </label>
+                                  ) : stop.kind === "multi-city" ? (
+                                    <span className="self-transfer">{copy.selfTransfer}</span>
                                   ) : (
                                     <span className="fixed-connection">{copy.fixedConnection}</span>
                                   )}
@@ -1131,7 +1136,9 @@ export default function RouteFinder() {
                               <div className="ticket-heading">
                                 <strong>{copy.ticket} {ticketItem.ticketIndex + 1}</strong>
                                 <span suppressHydrationWarning>{ticketItem.price != null ? `$${ticketItem.price.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })}` : '---'} · {localizeDateLabel(ticketItem.fareDate, locale)}</span>
-                                <a href={ticketItem.fareUrl} target="_blank" rel="noreferrer">{copy.view} {ticketItem.fareSource} ↗</a>
+                                {ticketItem.fareUrl && (
+                                  <a href={ticketItem.fareUrl} target="_blank" rel="noreferrer">{copy.view} {ticketItem.fareSource} ↗</a>
+                                )}
                               </div>
                               <div className="flights">
                                 {ticketItem.flights.map((flight, flightIndex) => (

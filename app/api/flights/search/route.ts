@@ -490,6 +490,7 @@ function combineTwoLegResults(firstLeg: any[], secondLeg: any[]) {
         price: f1.price + f2.price,
         currency: f1.currency,
         cabinClass: f1.cabinClass,
+        bookingUrl: f1.bookingUrl || f2.bookingUrl || "",
         priceLevel: f1.priceLevel,
         flights: [...(f1.flights || []), ...(f2.flights || [])],
         airportNames: {

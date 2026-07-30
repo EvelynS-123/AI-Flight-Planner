@@ -192,7 +192,8 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 .stay-selector { min-width: 178px; display: grid; gap: 5px; }
 .stay-selector > span { color: var(--muted); font-size: 11px; font-weight: 650; }
 .stay-selector select { width: 100%; appearance: none; padding: 9px 30px 9px 11px; border: 1px solid rgba(123, 88, 41, 0.16); border-radius: 11px; color: var(--ink); background: rgba(255, 255, 255, 0.84); font-size: 12px; font-weight: 700; cursor: pointer; }
-.fixed-connection { flex: none; padding: 7px 10px; color: #315f81; background: rgba(255, 255, 255, 0.72); border-radius: 999px; font-size: 11px; font-weight: 720; }
+.fixed-connection, .self-transfer { flex: none; padding: 7px 10px; color: #315f81; background: rgba(255, 255, 255, 0.72); border-radius: 999px; font-size: 11px; font-weight: 720; }
+.self-transfer { color: #7b5829; box-shadow: inset 0 0 0 1px rgba(123, 88, 41, 0.1); }
 .flight-tickets { display: grid; gap: 14px; margin: 0 22px; }
 .flight-ticket { overflow: hidden; border: 1px solid var(--line); border-radius: 17px 20px 16px 21px; background: rgba(255, 255, 255, 0.62); }
 .ticket-heading { display: flex; align-items: center; gap: 12px; padding: 11px 14px; color: var(--muted); background: rgba(232, 243, 250, 0.54); font-size: 11px; }
@@ -250,17 +251,27 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
 
 /* Share Button */
-.live-variant-picker { display: grid; grid-template-columns: minmax(150px, 0.8fr) minmax(150px, 0.7fr) minmax(260px, 1.2fr); align-items: end; gap: 14px; margin: 16px 22px 0; padding: 14px 16px; border: 1px solid rgba(90, 156, 192, 0.18); border-radius: 16px 20px 15px 21px; background: rgba(238, 247, 252, 0.68); backdrop-filter: blur(16px) saturate(130%); -webkit-backdrop-filter: blur(16px) saturate(130%); }
-.live-variant-summary { display: grid; gap: 3px; align-self: center; }
-.live-variant-summary span, .live-variant-picker label span { color: var(--muted); font-size: 11px; font-weight: 650; }
-.live-variant-summary strong { color: var(--ink); font-size: 14px; }
-.live-variant-summary small { color: var(--blue-dark); font-size: 9px; line-height: 1.35; }
-.live-variant-picker label { min-width: 0; display: grid; gap: 5px; }
-.live-variant-picker select, .live-variant-picker input { width: 100%; min-height: 42px; padding: 9px 12px; border: 1px solid rgba(90, 156, 192, 0.26); border-radius: 12px; color: var(--ink); background: rgba(255, 255, 255, 0.9); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: border-color 160ms ease, box-shadow 160ms ease, transform 90ms ease; }
-.live-variant-picker select { appearance: none; padding-right: 36px; }
-.live-variant-picker select:focus, .live-variant-picker input:focus { border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px rgba(58, 126, 168, 0.12); }
-.live-variant-picker select:active, .live-variant-picker input:active { transform: scale(0.995); }
-.live-variant-picker select:disabled, .live-variant-picker input:disabled { opacity: 0.55; cursor: wait; }
+.live-variant-picker { display: grid; grid-template-columns: minmax(170px, 0.78fr) minmax(170px, 0.72fr) minmax(320px, 1.5fr); align-items: end; gap: 13px; margin: 16px 22px 0; padding: 15px; border: 1px solid rgba(255, 255, 255, 0.82); border-radius: 18px 22px 17px 23px; background: linear-gradient(145deg, rgba(247, 252, 255, 0.8), rgba(231, 244, 251, 0.68)); box-shadow: 0 12px 30px rgba(41, 83, 112, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.92); backdrop-filter: blur(22px) saturate(150%); -webkit-backdrop-filter: blur(22px) saturate(150%); }
+.live-variant-summary { display: grid; gap: 3px; align-self: center; padding: 0 3px; }
+.live-variant-summary span, .variant-field > span:first-child { color: var(--muted); font-size: 11px; font-weight: 680; letter-spacing: 0.015em; }
+.live-variant-summary strong { color: var(--ink); font-size: 14px; letter-spacing: -0.01em; }
+.live-variant-summary small { color: var(--blue-dark); font-size: 9px; line-height: 1.4; }
+.variant-field { min-width: 0; display: grid; gap: 6px; }
+.variant-control { position: relative; min-width: 0; min-height: 48px; display: grid; grid-template-columns: 24px minmax(0, 1fr) 18px; align-items: center; gap: 9px; padding: 0 12px; overflow: hidden; border: 1px solid rgba(72, 126, 161, 0.2); border-radius: 14px 17px 13px 18px; color: var(--ink); background: rgba(255, 255, 255, 0.76); box-shadow: 0 4px 12px rgba(41, 83, 112, 0.055), inset 0 1px 0 rgba(255, 255, 255, 0.96); cursor: pointer; transform: translateZ(0); transition: border-color 160ms ease, background 180ms ease, box-shadow 260ms var(--spring), transform 100ms ease-out; }
+.variant-control:hover { border-color: rgba(58, 126, 168, 0.34); background: rgba(255, 255, 255, 0.9); box-shadow: 0 8px 20px rgba(41, 83, 112, 0.09), inset 0 1px 0 white; }
+.variant-control:focus-within { border-color: rgba(58, 126, 168, 0.68); box-shadow: 0 0 0 3px rgba(58, 126, 168, 0.13), 0 8px 20px rgba(41, 83, 112, 0.08); }
+.variant-control:active { transform: scale(0.985); }
+.variant-control.disabled { opacity: 0.52; cursor: wait; }
+.variant-control strong { min-width: 0; overflow: hidden; font-size: 12px; font-weight: 720; letter-spacing: -0.005em; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.variant-control-icon { position: relative; width: 23px; height: 23px; display: block; color: var(--blue); background: rgba(90, 156, 192, 0.12); border-radius: 8px 10px 8px 11px; }
+.date-control .variant-control-icon::before { content: ""; position: absolute; inset: 5px 4px 4px; border: 1.5px solid currentColor; border-radius: 3px; }
+.date-control .variant-control-icon::after { content: ""; position: absolute; top: 8px; left: 5px; right: 5px; height: 1.5px; background: currentColor; box-shadow: 3px -5px 0 -0.2px currentColor, 8px -5px 0 -0.2px currentColor; }
+.time-control .variant-control-icon::before { content: ""; position: absolute; inset: 4px; border: 1.5px solid currentColor; border-radius: 50%; }
+.time-control .variant-control-icon::after { content: ""; position: absolute; width: 5px; height: 4px; left: 11px; top: 7px; border-left: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform-origin: left bottom; transform: rotate(-8deg); }
+.variant-control-disclosure { color: #70828f; font-size: 15px; text-align: center; transition: transform 240ms var(--spring); }
+.variant-control:focus-within .variant-control-disclosure { transform: translateY(1px) rotate(180deg); }
+.variant-native-control { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.variant-native-control:disabled { cursor: wait; }
 .live-variant-status { min-height: 14px; grid-column: 1 / -1; color: var(--muted); font-size: 10px; line-height: 1.4; }
 .details-actions { display: flex; justify-content: flex-end; padding: 14px 22px 0; }
 .share-button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255, 255, 255, 0.8); border: 1px solid rgba(5, 103, 232, 0.2); border-radius: 999px; color: var(--blue); font-size: 11px; font-weight: 700; cursor: pointer; transition: all 150ms ease; }
@@ -656,14 +667,14 @@ footer p { max-width: 680px; margin: 0; text-align: right; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .topbar, .flight-chat, .assistant-reopen, .route-card, .live-variant-picker, .chat-hub-option, .preference-dialog, .ai-workspace-header, .ai-chat-sheet, .ai-pace-control { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .topbar, .flight-chat, .assistant-reopen, .route-card, .live-variant-picker, .variant-control, .chat-hub-option, .preference-dialog, .ai-workspace-header, .ai-chat-sheet, .ai-pace-control { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .preference-overlay { background: rgba(30, 61, 90, 0.58); backdrop-filter: none; -webkit-backdrop-filter: none; }
   .planner.preference-open, .planner.ai-workspace-open { filter: none; transform: scale(0.994); }
 }
 
 @media (prefers-contrast: more) {
   :root { --line: rgba(0, 0, 0, 0.35); }
-  .flight-chat, .assistant-reopen, .route-card, .chat-hub-option, .preference-dialog, .preference-category { border-color: rgba(0, 0, 0, 0.42); }
+  .flight-chat, .assistant-reopen, .route-card, .variant-control, .chat-hub-option, .preference-dialog, .preference-category { border-color: rgba(0, 0, 0, 0.42); }
 }
 
 /* ─── Flight Chat ─── */

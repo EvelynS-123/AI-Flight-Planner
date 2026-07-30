@@ -42,6 +42,14 @@ test("grouped live results expose one inline date and time selector", () => {
   assert.match(flightChatSource, /chatResultsTitle\(groupFlightResults\(flights\)\.length\)/);
 });
 
+test("variant choices expose sightseeing time and keep the edited route anchored", () => {
+  assert.match(routeFinderSource, /maxUsableStopoverMinutesForFlight/);
+  assert.match(routeFinderSource, /className="variant-native-control"/);
+  assert.match(routeFinderSource, /variantAnchor\.current = \{ id: groupId, top:/);
+  assert.match(routeFinderSource, /window\.scrollTo\(\{ top: window\.scrollY \+ delta, behavior: "auto" \}\)/);
+  assert.match(routeFinderSource, /if \(id === anchoredRouteId\) continue/);
+});
+
 test("route exploration stays generalized, diverse, and preference-grounded", () => {
   assert.match(chatApiSource, /match each hub's real travel character to them semantically/);
   assert.match(chatApiSource, /rather than a fixed route table/);

@@ -321,6 +321,14 @@ function internalStops(flights: ScheduledFlight[]) {
   return stops;
 }
 
+export function estimateUsableStopoverMinutes(
+  durationMinutes: number,
+  airport: string,
+) {
+  const access = AIRPORT_CITY_MINUTES[airport] ?? 60;
+  return Math.max(0, Math.round(durationMinutes) - 60 - access * 2 - 120);
+}
+
 function makeStop(
   airport: string,
   kind: ScheduledStop["kind"],
@@ -330,63 +338,140 @@ function makeStop(
   arrivalUtc: number,
   departureUtc: number,
 ): ScheduledStop {
-  const access = AIRPORT_CITY_MINUTES[airport] ?? 60;
-  const usableMinutes = Math.max(0, durationMinutes - 60 - access * 2 - 120);
+  const usableMinutes = estimateUsableStopoverMinutes(durationMinutes, airport);
   return { airport, kind, durationMinutes, usableMinutes, playDays, options, arrivalUtc, departureUtc };
 }
 
+function liveScheduledFlight(flight: any): ScheduledFlight | null {
+  const departureLocal = String(flight?.departure_airport?.time || "");
+  const arrivalLocal = String(flight?.arrival_airport?.time || "");
+  const [departureDate = "", departureTime = ""] = departureLocal.split(" ");
+  const [arrivalDate = "", arrivalTime = ""] = arrivalLocal.split(" ");
+  const from = String(flight?.departure_airport?.id || "").toUpperCase();
+  const to = String(flight?.arrival_airport?.id || "").toUpperCase();
+  if (!from || !to || !departureDate || !departureTime || !arrivalDate || !arrivalTime) {
+    return null;
+  }
+
+  const departureUtc = localDateTimeToUtc(departureDate, departureTime, from);
+  const arrivalUtc = localDateTimeToUtc(arrivalDate, arrivalTime, to);
+  const flightNumber = String(flight?.flight_number || "");
+  return {
+    id: flightNumber || `${from}-${to}-${departureLocal}`,
+    from,
+    to,
+    airlineCode: flightNumber.substring(0, 2),
+    airlineName: String(flight?.airline || ""),
+    flightNumber,
+    departureTime,
+    durationMinutes: Number(flight?.duration) || Math.max(
+      0,
+      Math.round((arrivalUtc - departureUtc) / 60_000),
+    ),
+    operatingDays: [0, 1, 2, 3, 4, 5, 6],
+    scheduleSource: "Google Flights",
+    logoUrl: String(
+      flight?.airline_logo
+        || `https://www.gstatic.com/flights/airline_logos/70px/dark/${flightNumber.substring(0, 2)}.png`,
+    ),
+    departureUtc,
+    arrivalUtc,
+    departureDate,
+    arrivalDate,
+    arrivalTime,
+    arrivalDayOffset: Math.round(
+      dateToDayNumber(arrivalDate) - dateToDayNumber(departureDate),
+    ),
+  };
+}
+
 function buildSchedule(route: RouteOption, requestedDays: number[] = []) {
+  const existingLiveSchedule = (route as RouteOption & {
+    liveSchedule?: {
+      scheduledTickets: ScheduledTicket[];
+      scheduledStops: ScheduledStop[];
+      totalDurationMinutes: number;
+      selectedStopoverDays: number[];
+      dataValid: boolean;
+    };
+  }).liveSchedule;
+  if (existingLiveSchedule) return existingLiveSchedule;
+
   const scheduledTickets: ScheduledTicket[] = [];
   let scheduledStops: ScheduledStop[] = [];
   const selectedStopoverDays: number[] = [];
 
-  if (route.liveFlights && route.liveFlights.length > 0) {
-    const flights: ScheduledFlight[] = route.liveFlights.map(fl => {
-      const depLocal = fl.departure_airport.time;
-      const arrLocal = fl.arrival_airport.time;
-      const depDate = depLocal.split(" ")[0];
-      const depTime = depLocal.split(" ")[1];
-      const arrDate = arrLocal.split(" ")[0];
-      const arrTime = arrLocal.split(" ")[1];
-      
-      const departureUtc = localDateTimeToUtc(depDate, depTime, fl.departure_airport.id);
-      const arrivalUtc = localDateTimeToUtc(arrDate, arrTime, fl.arrival_airport.id);
+  const liveTickets = route.liveTickets?.length
+    ? route.liveTickets
+    : route.liveFlights?.length
+      ? [{
+          price: route.total,
+          fareDate: route.segments[0].date,
+          fareSource: route.segments[0].source,
+          fareUrl: route.segments[0].url,
+          flights: route.liveFlights,
+        }]
+      : [];
+  if (liveTickets.length > 0) {
+    let previousFlight: ScheduledFlight | null = null;
 
-      return {
-        id: fl.flight_number,
-        from: fl.departure_airport.id,
-        to: fl.arrival_airport.id,
-        airlineCode: fl.flight_number.substring(0, 2),
-        airlineName: fl.airline,
-        flightNumber: fl.flight_number,
-        departureTime: depTime,
-        durationMinutes: fl.duration,
-        operatingDays: [0, 1, 2, 3, 4, 5, 6],
-        scheduleSource: "Google Flights",
-        logoUrl: fl.airline_logo || `https://www.gstatic.com/flights/airline_logos/70px/dark/${fl.flight_number.substring(0, 2)}.png`,
-        departureUtc,
-        arrivalUtc,
-        departureDate: depDate,
-        arrivalDate: arrDate,
-        arrivalTime: arrTime,
-        arrivalDayOffset: Math.round(dateToDayNumber(arrDate) - dateToDayNumber(depDate))
-      };
-    });
+    for (let ticketIndex = 0; ticketIndex < liveTickets.length; ticketIndex += 1) {
+      const ticket = liveTickets[ticketIndex];
+      const flights = ticket.flights
+        .map(liveScheduledFlight)
+        .filter((flight): flight is ScheduledFlight => Boolean(flight));
+      if (flights.length !== ticket.flights.length || flights.length === 0) return null;
 
-    scheduledStops = internalStops(flights);
+      if (previousFlight) {
+        const firstFlight = flights[0];
+        if (previousFlight.to !== firstFlight.from) return null;
+        const durationMinutes = Math.round(
+          (firstFlight.departureUtc - previousFlight.arrivalUtc) / 60_000,
+        );
+        if (durationMinutes < 0) return null;
+        const playDays = Math.max(
+          0,
+          dateToDayNumber(firstFlight.departureDate)
+            - dateToDayNumber(previousFlight.arrivalDate),
+        );
+        selectedStopoverDays.push(playDays);
+        scheduledStops.push(makeStop(
+          firstFlight.from,
+          "multi-city",
+          durationMinutes,
+          playDays,
+          [],
+          previousFlight.arrivalUtc,
+          firstFlight.departureUtc,
+        ));
+      }
 
-    scheduledTickets.push({
-      ticketIndex: 0,
-      price: route.total,
-      fareDate: flights[0].departureDate,
-      fareSource: route.segments[0].source,
-      fareUrl: route.segments[0].url,
-      flights,
-    });
+      scheduledStops.push(...internalStops(flights));
+      scheduledTickets.push({
+        ticketIndex,
+        price: ticket.price,
+        fareDate: ticket.fareDate,
+        fareSource: ticket.fareSource,
+        fareUrl: ticket.fareUrl,
+        flights,
+      });
+      previousFlight = flights.at(-1)!;
+    }
 
-    const dataValid = true;
-    const totalDurationMinutes = Math.round((flights[flights.length - 1].arrivalUtc - flights[0].departureUtc) / 60_000);
-    return { scheduledTickets, scheduledStops, totalDurationMinutes, selectedStopoverDays, dataValid };
+    const firstFlight = scheduledTickets[0].flights[0];
+    const lastFlight = scheduledTickets.at(-1)!.flights.at(-1)!;
+    const totalDurationMinutes = Math.round(
+      (lastFlight.arrivalUtc - firstFlight.departureUtc) / 60_000,
+    );
+    const dataValid = totalDurationMinutes >= 0
+      && scheduledStops.every((stop) => stop.durationMinutes >= 0);
+    return {
+      scheduledTickets,
+      scheduledStops,
+      totalDurationMinutes,
+      selectedStopoverDays,
+      dataValid,
+    };
   }
 
   let previousArrival = -Infinity;
