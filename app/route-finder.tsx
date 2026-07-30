@@ -229,6 +229,7 @@ export default function RouteFinder() {
   const expandAnchorFrame = useRef<number | null>(null);
   const previousScrollBehavior = useRef("");
   const previousPositions = useRef(new Map<string, number>());
+  const previousRouteOrder = useRef<string[]>([]);
   const reorderAnimations = useRef(new Map<string, Animation>());
   const variantAnchor = useRef<{ id: string; top: number } | null>(null);
   const anchoredRouteForLayout = useRef<string | null>(null);
@@ -306,6 +307,9 @@ export default function RouteFinder() {
   useLayoutEffect(() => {
     if (isDraggingWeights) return;
     const nextPositions = new Map<string, number>();
+    const nextRouteOrder = results.map((route) => route.id);
+    const previousRouteIndexes = new Map(previousRouteOrder.current.map((id, index) => [id, index]));
+    const nextRouteIndexes = new Map(nextRouteOrder.map((id, index) => [id, index]));
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const anchoredRouteId = anchoredRouteForLayout.current;
 
@@ -319,6 +323,7 @@ export default function RouteFinder() {
       if (previous === undefined) continue;
       const delta = previous - nextTop;
       if (Math.abs(delta) < 1) continue;
+      if (previousRouteIndexes.get(id) === nextRouteIndexes.get(id)) continue;
 
       reorderAnimations.current.get(id)?.cancel();
       if (id === anchoredRouteId) continue;
@@ -339,6 +344,7 @@ export default function RouteFinder() {
       };
     }
     previousPositions.current = nextPositions;
+    previousRouteOrder.current = nextRouteOrder;
     anchoredRouteForLayout.current = null;
   }, [results, isDraggingWeights]);
 
