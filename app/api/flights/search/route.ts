@@ -27,7 +27,9 @@ export async function POST(request: Request) {
     cabinClass,
     maxStops,
     adults,
-    legs
+    legs,
+    explorationHubs,
+    explorationHubReasons,
   } = await request.json();
 
   const apiKey = process.env.SERPAPI_API_KEY;
@@ -42,9 +44,21 @@ export async function POST(request: Request) {
   }
 
   // Helper to search a single leg
-  async function searchSingleLeg(legOrigins: string[], legDestinations: string[], startDate: string, endDate: string) {
-    const outDates = getSampledDates(startDate, endDate);
-    const retDates = tripType === "round_trip" && returnDateStart && returnDateEnd 
+  async function searchSingleLeg(
+    legOrigins: string[],
+    legDestinations: string[],
+    startDate: string,
+    endDate: string,
+    sampledDateLimit?: number,
+    allowMockFallback = true,
+    forceOneWay = false,
+  ) {
+    const outDates = limitDates(getSampledDates(startDate, endDate), sampledDateLimit);
+    const useRoundTrip = !forceOneWay
+      && tripType === "round_trip"
+      && returnDateStart
+      && returnDateEnd;
+    const retDates = useRoundTrip
       ? getSampledDates(returnDateStart, returnDateEnd)
       : [undefined];
 
@@ -54,7 +68,7 @@ export async function POST(request: Request) {
       for (const dest of legDestinations) {
         for (const outDate of outDates) {
           for (const retDate of retDates) {
-            let url = `https://serpapi.com/search.json?engine=google_flights&departure_id=${origin}&arrival_id=${dest}&outbound_date=${outDate}&currency=USD&type=${tripType === "round_trip" ? 1 : 2}&api_key=${apiKey}&adults=${adults || 1}`;
+            let url = `https://serpapi.com/search.json?engine=google_flights&departure_id=${origin}&arrival_id=${dest}&outbound_date=${outDate}&currency=USD&type=${useRoundTrip ? 1 : 2}&api_key=${apiKey}&adults=${adults || 1}`;
             
             if (retDate) {
               url += `&return_date=${retDate}`;
@@ -97,7 +111,7 @@ export async function POST(request: Request) {
       .sort((a, b) => a.price - b.price)
       .slice(0, 100);
 
-    if (finalResults.length === 0) {
+    if (finalResults.length === 0 && allowMockFallback) {
       finalResults = generateMockFlights(legOrigins[0] || "NRT", legDestinations[0] || "LAX", startDate);
     }
     return finalResults;
@@ -118,74 +132,199 @@ export async function POST(request: Request) {
         start = d.toISOString().split("T")[0];
       }
     }
-    return searchSingleLeg(leg.origins, leg.destinations, start, dateRangeEnd);
+    return searchSingleLeg(
+      leg.origins,
+      leg.destinations,
+      start,
+      dateRangeEnd,
+      undefined,
+      true,
+      legsToProcess.length > 1,
+    );
   });
 
   const allLegsResults = await Promise.all(legResultsPromises);
 
-  // 2. If it's a single leg, return it directly
+  // 2. For a normal origin-destination search, retain Google's direct and
+  // connecting itineraries, then add grounded split-ticket explorations.
   if (allLegsResults.length === 1) {
-    return Response.json({ results: allLegsResults[0] });
+    const normalResults = allLegsResults[0];
+    const originCodes = Array.isArray(legsToProcess[0]?.origins)
+      ? legsToProcess[0].origins
+      : [];
+    const destinationCodes = Array.isArray(legsToProcess[0]?.destinations)
+      ? legsToProcess[0].destinations
+      : [];
+    const groundedHubs = normalizeExplorationHubs(
+      explorationHubs,
+      originCodes,
+      destinationCodes,
+    );
+
+    if (groundedHubs.length === 0 || maxStops === 0) {
+      return Response.json({ results: normalResults });
+    }
+
+    const searchStart = dateRangeStart || new Date().toISOString().split("T")[0];
+    const searchEnd = dateRangeEnd || searchStart;
+    const exploredByHub = await Promise.all(
+      groundedHubs.map(async (hub) => {
+        const [firstLeg, secondLeg] = await Promise.all([
+          searchSingleLeg(originCodes, [hub], searchStart, searchEnd, 3, false, true),
+          searchSingleLeg(
+            [hub],
+            destinationCodes,
+            addIsoDays(searchStart, 1),
+            addIsoDays(searchEnd, 2),
+            3,
+            false,
+            true,
+          ),
+        ]);
+
+        const hubReasons = explorationHubReasons && typeof explorationHubReasons === "object"
+          ? explorationHubReasons as Record<string, unknown>
+          : null;
+        const reason = typeof hubReasons?.[hub] === "string"
+          ? hubReasons[hub]
+          : undefined;
+
+        return combineTwoLegResults(firstLeg, secondLeg)
+          .filter((flight) => maxStops == null || flight.stops <= maxStops)
+          .map((flight) => ({
+            ...flight,
+            explorationHub: hub,
+            explorationHubReason: reason,
+          }));
+      }),
+    );
+
+    return Response.json({
+      results: dedupeFlights([...normalResults, ...exploredByHub.flat()])
+        .sort((a, b) => a.price - b.price)
+        .slice(0, 150),
+    });
   }
 
-  // 3. Multi-city combining logic (assuming 2 legs for demo)
+  // 3. Explicit required via-city instructions arrive as formal legs.
   const leg1Results = allLegsResults[0];
   const leg2Results = allLegsResults[1];
-  const combined = [];
-
-  for (const f1 of leg1Results) {
-    for (const f2 of leg2Results) {
-      const arrTime1 = new Date(f1.arrivalTime.replace(" ", "T")).getTime();
-      const depTime2 = new Date(f2.departureTime.replace(" ", "T")).getTime();
-      const layoverMins = (depTime2 - arrTime1) / 60000;
-      
-      // Allow layovers between 1.5 hours and 36 hours for combined multi-city
-      if (layoverMins >= 90 && layoverMins <= 2160) {
-        const isLcc1 = ["Budget Fly", "Express Air"].includes(f1.airline) || f1.airline?.toLowerCase().includes("lcc");
-        const isLcc2 = ["Budget Fly", "Express Air"].includes(f2.airline) || f2.airline?.toLowerCase().includes("lcc");
-        
-        let riskPattern: "A" | "B" | "C" = "C";
-        if (f1.airline === f2.airline) {
-          riskPattern = (isLcc1 || isLcc2) ? "C" : "B";
-        } else {
-          // In a real app we'd check alliance mapping.
-          // For demo, if they are both "full" (not LCC), we'll assume they might be partners sometimes.
-          if (!isLcc1 && !isLcc2) {
-             riskPattern = Math.random() > 0.5 ? "A" : "C";
-          }
-        }
-
-        combined.push({
-          id: `${f1.id}-${f2.id}`,
-          airline: f1.airline === f2.airline ? f1.airline : "Multiple Airlines",
-          airlineLogo: f1.airline === f2.airline ? f1.airlineLogo : "https://www.gstatic.com/flights/airline_logos/70px/dark/multi.png",
-          flightNumbers: [...f1.flightNumbers, ...f2.flightNumbers],
-          origin: f1.origin,
-          destination: f2.destination,
-          departureTime: f1.departureTime,
-          arrivalTime: f2.arrivalTime,
-          durationMinutes: f1.durationMinutes + f2.durationMinutes + layoverMins,
-          stops: f1.stops + f2.stops + 1,
-          stopAirports: [...f1.stopAirports, f1.destination, ...f2.stopAirports],
-          price: f1.price + f2.price,
-          currency: f1.currency,
-          cabinClass: f1.cabinClass,
-          priceLevel: f1.priceLevel,
-          flights: [...f1.flights, ...f2.flights],
-          isSelfTransfer: true,
-          riskPattern,
-          leg1: f1,
-          leg2: f2
-        });
-      }
-    }
-  }
-
-  const finalCombined = combined
+  const finalCombined = combineTwoLegResults(leg1Results, leg2Results)
+    .filter((flight) => maxStops == null || flight.stops <= maxStops)
     .sort((a, b) => a.price - b.price)
     .slice(0, 100);
 
   return Response.json({ results: finalCombined });
+}
+
+function normalizeExplorationHubs(
+  value: unknown,
+  origins: string[],
+  destinations: string[],
+): string[] {
+  if (!Array.isArray(value)) return [];
+
+  const endpoints = new Set(
+    [...origins, ...destinations]
+      .filter((code): code is string => typeof code === "string")
+      .map((code) => code.toUpperCase()),
+  );
+
+  return Array.from(
+    new Set(
+      value
+        .filter((code): code is string => typeof code === "string")
+        .map((code) => code.trim().toUpperCase())
+        .filter((code) => /^[A-Z]{3}$/.test(code) && !endpoints.has(code)),
+    ),
+  ).slice(0, 3);
+}
+
+function addIsoDays(dateString: string, days: number): string {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return dateString;
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function limitDates(dates: string[], limit?: number): string[] {
+  if (!limit || limit < 1 || dates.length <= limit) return dates;
+  if (limit === 1) return [dates[Math.floor((dates.length - 1) / 2)]];
+
+  return Array.from(
+    new Set(
+      Array.from({ length: limit }, (_, index) =>
+        dates[Math.round(index * (dates.length - 1) / (limit - 1))]
+      ),
+    ),
+  );
+}
+
+function combineTwoLegResults(firstLeg: any[], secondLeg: any[]) {
+  const combined: any[] = [];
+
+  for (const f1 of firstLeg) {
+    for (const f2 of secondLeg) {
+      const arrTime1 = new Date(f1.arrivalTime.replace(" ", "T")).getTime();
+      const depTime2 = new Date(f2.departureTime.replace(" ", "T")).getTime();
+      const layoverMins = (depTime2 - arrTime1) / 60000;
+
+      if (!Number.isFinite(layoverMins) || layoverMins < 90 || layoverMins > 2160) {
+        continue;
+      }
+
+      const isLcc1 =
+        ["Budget Fly", "Express Air"].includes(f1.airline)
+        || f1.airline?.toLowerCase().includes("lcc");
+      const isLcc2 =
+        ["Budget Fly", "Express Air"].includes(f2.airline)
+        || f2.airline?.toLowerCase().includes("lcc");
+
+      let riskPattern: "A" | "B" | "C" = "C";
+      if (f1.airline === f2.airline) {
+        riskPattern = isLcc1 || isLcc2 ? "C" : "B";
+      } else if (!isLcc1 && !isLcc2) {
+        riskPattern = parseInt(fnv1a(`${f1.airline}|${f2.airline}`), 16) % 2 === 0
+          ? "A"
+          : "C";
+      }
+
+      combined.push({
+        id: `${f1.id}-${f2.id}`,
+        airline: f1.airline === f2.airline ? f1.airline : "Multiple Airlines",
+        airlineLogo: f1.airline === f2.airline
+          ? f1.airlineLogo
+          : "https://www.gstatic.com/flights/airline_logos/70px/dark/multi.png",
+        flightNumbers: [...f1.flightNumbers, ...f2.flightNumbers],
+        origin: f1.origin,
+        destination: f2.destination,
+        departureTime: f1.departureTime,
+        arrivalTime: f2.arrivalTime,
+        durationMinutes: f1.durationMinutes + f2.durationMinutes + layoverMins,
+        stops: f1.stops + f2.stops + 1,
+        stopAirports: [...f1.stopAirports, f1.destination, ...f2.stopAirports],
+        price: f1.price + f2.price,
+        currency: f1.currency,
+        cabinClass: f1.cabinClass,
+        priceLevel: f1.priceLevel,
+        flights: [...(f1.flights || []), ...(f2.flights || [])],
+        isSelfTransfer: true,
+        riskPattern,
+        leg1: f1,
+        leg2: f2,
+      });
+    }
+  }
+
+  return combined;
+}
+
+function dedupeFlights(flights: any[]) {
+  const unique = new Map<string, any>();
+  for (const flight of flights) {
+    if (!unique.has(flight.id)) unique.set(flight.id, flight);
+  }
+  return Array.from(unique.values());
 }
 
 function generateMockFlights(origin: string, dest: string, dateStr: string) {

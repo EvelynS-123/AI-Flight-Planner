@@ -4,6 +4,8 @@ import test from "node:test";
 
 const routeFinderSource = await readFile(new URL("../app/route-finder.tsx", import.meta.url), "utf8");
 const flightChatSource = await readFile(new URL("../app/flight-chat.tsx", import.meta.url), "utf8");
+const chatApiSource = await readFile(new URL("../app/api/chat/route.ts", import.meta.url), "utf8");
+const flightSearchApiSource = await readFile(new URL("../app/api/flights/search/route.ts", import.meta.url), "utf8");
 
 test("chatbot replaces the legacy origin destination and month search form", () => {
   assert.doesNotMatch(routeFinderSource, /className="search-card"/);
@@ -28,4 +30,19 @@ test("chat component remains mounted while its interface is collapsed", () => {
 test("loading state hides stale route metadata and controls", () => {
   assert.match(routeFinderSource, /!isLoading && \(\s*<div className="results-heading">/);
   assert.match(routeFinderSource, /!isLoading && results\.length > 0 && \(\s*<div className=\{`weight-panel/);
+});
+
+test("grouped live results expose one inline date and time selector", () => {
+  assert.match(routeFinderSource, /groupFlightResults\(flights\)/);
+  assert.match(routeFinderSource, /className="live-variant-picker"/);
+  assert.match(routeFinderSource, /selectLiveFlightVariant\(route\.id, event\.target\.value\)/);
+  assert.match(flightChatSource, /chatResultsTitle\(groupFlightResults\(flights\)\.length\)/);
+});
+
+test("route exploration is preference-grounded and has no category quota", () => {
+  assert.match(chatApiSource, /match each hub's real travel character to them semantically/);
+  assert.match(chatApiSource, /Treat these as examples, not a fixed city table/);
+  assert.match(chatApiSource, /do not target a fixed number of direct, connecting, or multi-city results/);
+  assert.match(flightSearchApiSource, /normalizeExplorationHubs/);
+  assert.match(flightSearchApiSource, /combineTwoLegResults/);
 });

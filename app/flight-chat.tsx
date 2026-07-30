@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { COPY, type Locale } from "./i18n";
 import type { FlightResult } from "./flight-results";
+import { groupFlightResults } from "./flights/group-results";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -15,6 +16,7 @@ type Phase = "chat" | "ready" | "searching";
 
 type FlightChatProps = {
   locale: Locale;
+  preferenceContext?: unknown;
   isOpen: boolean;
   onClose: () => void;
   onSearchStart: () => void;
@@ -24,6 +26,7 @@ type FlightChatProps = {
 
 export function FlightChat({
   locale,
+  preferenceContext,
   isOpen,
   onClose,
   onSearchStart,
@@ -92,7 +95,7 @@ export function FlightChat({
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: apiMessages, locale }),
+        body: JSON.stringify({ messages: apiMessages, locale, preferenceContext }),
       });
 
       if (!response.ok) {
@@ -163,7 +166,10 @@ export function FlightChat({
 
       setMessages((current) => [
         ...withoutSearching(current),
-        { role: "assistant", content: copy.chatResultsTitle(flights.length) },
+        {
+          role: "assistant",
+          content: copy.chatResultsTitle(groupFlightResults(flights).length),
+        },
       ]);
       setPhase("chat");
       onSearchComplete(flights);
