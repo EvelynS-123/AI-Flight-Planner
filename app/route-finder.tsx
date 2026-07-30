@@ -173,7 +173,7 @@ export default function RouteFinder() {
   const [aiOriginRect, setAiOriginRect] = useState<DOMRect | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [liveFlights, setLiveFlights] = useState<RouteOption[] | null>(null);
-  const [searched, setSearched] = useState(true);
+  const [searched, setSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isDraggingWeights, setIsDraggingWeights] = useState(false);

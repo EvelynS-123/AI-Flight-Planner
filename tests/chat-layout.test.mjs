@@ -8,6 +8,7 @@ const flightChatSource = await readFile(new URL("../app/flight-chat.tsx", import
 test("chatbot replaces the legacy origin destination and month search form", () => {
   assert.doesNotMatch(routeFinderSource, /className="search-card"/);
   assert.doesNotMatch(routeFinderSource, /POPULAR_AIRPORTS|draftOrigin|draftDestination/);
+  assert.match(routeFinderSource, /const \[searched, setSearched\] = useState\(false\)/);
   assert.match(routeFinderSource, /className="assistant-search-panel" hidden=\{!isChatOpen\}/);
   assert.match(routeFinderSource, /<FlightChat[\s\S]*onSearchStart=\{beginChatSearch\}/);
 });
