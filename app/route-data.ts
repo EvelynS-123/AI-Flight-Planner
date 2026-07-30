@@ -1,7 +1,6 @@
 import { scoreScheduledRoutes, type StopoverSelections } from "./flight-schedules.ts";
-import type { ScheduledStop, ScheduledTicket } from "./flight-schedules.ts";
 
-export type AirportCode = "PVG" | "PEK" | "HKG" | "TPE" | "ICN" | "KIX" | "NRT" | "LAX" | "SFO" | "SEA" | "YVR";
+export type AirportCode = string;
 
 export type Segment = {
   from: string;
@@ -21,18 +20,10 @@ export type RouteOption = {
   hubs: string[];
   ticketType: "direct" | "connection" | "multi-city";
   stopCount: number;
-  months: Array<"Aug" | "Sep">;
+  months: string[];
   segments: Segment[];
   total: number;
-  liveSchedule?: {
-    searchedAt: string;
-    currency: string;
-    scheduledTickets: ScheduledTicket[];
-    scheduledStops: ScheduledStop[];
-    totalDurationMinutes: number;
-    selectedStopoverDays: number[];
-    dataValid: boolean;
-  };
+  liveFlights?: any[];
 };
 
 export type RouteWeights = {
@@ -63,6 +54,7 @@ export const AIRPORTS: Record<string, { city: string; country: string }> = {
   ICN: { city: "首尔", country: "韩国" },
   KIX: { city: "大阪", country: "日本" },
   NRT: { city: "东京", country: "日本" },
+  HND: { city: "东京", country: "日本" },
   HNL: { city: "檀香山", country: "美国" },
   CAN: { city: "广州", country: "中国" },
   WUH: { city: "武汉", country: "中国" },
@@ -71,10 +63,22 @@ export const AIRPORTS: Record<string, { city: string; country: string }> = {
   SFO: { city: "旧金山", country: "美国" },
   SEA: { city: "西雅图", country: "美国" },
   YVR: { city: "温哥华", country: "加拿大" },
+  JFK: { city: "纽约", country: "美国" },
+  LHR: { city: "伦敦", country: "英国" },
+  CDG: { city: "巴黎", country: "法国" },
+  DXB: { city: "迪拜", country: "阿联酋" },
+  SYD: { city: "悉尼", country: "澳大利亚" },
+  SIN: { city: "新加坡", country: "新加坡" },
 };
 
-export const DEMO_ORIGINS: AirportCode[] = ["PVG", "HKG", "TPE", "NRT"];
-export const DEMO_DESTINATIONS: AirportCode[] = ["LAX", "SFO", "SEA", "YVR"];
+export const POPULAR_AIRPORTS: AirportCode[] = [
+  "NRT", "HND", "KIX", "ICN", "TPE", "HKG", "PVG", "PEK", 
+  "SIN", "BKK", "LHR", "CDG", "DXB", 
+  "LAX", "SFO", "JFK", "SEA", "YVR", "HNL", "SYD"
+];
+
+export const DEMO_ORIGINS: AirportCode[] = ["PVG", "HKG", "TPE", "NRT", "LHR", "CDG", "JFK", "DXB", "SYD"];
+export const DEMO_DESTINATIONS: AirportCode[] = ["LAX", "SFO", "SEA", "YVR", "LHR", "CDG", "JFK", "DXB", "SYD"];
 
 const SOURCES = {
   pvgNrt: { price: 106, date: "2026-09-18", airline: "Trip.com fare", source: "Trip.com", url: "https://www.trip.com/flights/airport-pvg-nrt/", stops: 0 },

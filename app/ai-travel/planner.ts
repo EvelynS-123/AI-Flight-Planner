@@ -132,7 +132,7 @@ function localizedFallbacks(locale: TravelPlanRequest["locale"], city: string) {
   };
   if (locale === "ja") return {
     planSummary: "フライト時刻と希望に合わせて乗り継ぎ都市の旅程を作成しました。",
-    stopoverSummary: `${city}の乗り継ぎ旅程です。空港へ戻る時間と余裕を確保しています。`,
+    stopoverSummary: `${city}の乗り継ぎ旅程です。空港へ戻る移動時間や、万が一のための余裕も確保しています。`,
     details: "現地の営業時間、待ち時間、交通状況に応じて調整してください。",
     hotel: "チェックインまたは手荷物預け",
     disclaimer: "デモ用の目安です。出発前に入国要件、交通、営業時間、フライト状況を確認してください。",
@@ -267,7 +267,7 @@ function summarizeSanitizedDays(
   const places = locale === "en" ? titles.join(", ") : titles.join("、");
   if (locale === "zh") return `${city} 中转行程安排了 ${places}，并保留返程交通和机场缓冲。`;
   if (locale === "ko") return `${city} 환승 일정에는 ${places}이 포함되며, 공항 복귀 시간과 여유를 확보했습니다.`;
-  if (locale === "ja") return `${city}の乗り継ぎ旅程には${places}を組み込み、空港へ戻る時間と余裕を確保しています。`;
+  if (locale === "ja") return `${city}の乗り継ぎ旅程には${places}を組み込みました。空港へ戻る移動時間や、万が一のための余裕も確保しています。`;
   return `${city} stopover including ${places}, with protected return transport and airport buffers.`;
 }
 
@@ -324,7 +324,7 @@ export function alignMealDescriptionToLocalTime(
     ja: {
       breakfast: "朝食",
       lunch: "昼食",
-      afternoon: "午後の食事",
+      afternoon: "カフェタイム",
       dinner: "夕食",
       late: "夜食",
     },
@@ -420,7 +420,7 @@ function cityTransitCopy(
   if (locale === "ja") return {
     title: walking ? "次の場所まで徒歩移動" : "次の場所へ移動",
     details: walking
-      ? `徒歩約${minutes}分です。道順確認、横断待ち、歩行者混雑の余裕を含みます。`
+      ? `徒歩約${minutes}分です。ルート確認、信号待ち、人混みを考慮して余裕を持たせています。`
       : congested
         ? `徒歩と公共交通で約${minutes}分です。一般的な混雑時間帯の待ち時間、乗換、遅延の余裕を加えています。`
         : `徒歩と公共交通で約${minutes}分です。待ち時間、乗換、通常の遅延余裕を含みます。`,
@@ -751,8 +751,8 @@ function journeyCopy(locale: TravelPlanRequest["locale"]) {
   };
   if (locale === "ja") return {
     land: "ゲート到着と降機",
-    landDetails: "着陸後の地上走行、搭乗橋またはバス、降機、入国エリアまでの徒歩を含みます。",
-    entry: "入国、手荷物、税関",
+    landDetails: "着陸後の地上移動、ボーディングブリッジ（またはバス）での移動、降機、入国エリアまでの徒歩を含みます。",
+    entry: "入国審査、手荷物受取、税関",
     entryDetails: "空港の混雑度に応じた待ち時間、書類確認、手荷物受取、税関を含みます。",
     outbound: "空港から市内へ移動",
     outboundDetails: "案内確認、乗車券、待ち時間、一般的な交通の遅れを含みます。",
@@ -761,13 +761,13 @@ function journeyCopy(locale: TravelPlanRequest["locale"]) {
     overnight: "宿泊、休息、個人時間",
     overnightDetails: "チェックイン、荷物整理、睡眠、朝食、チェックアウトの余裕を含みます。",
     pack: "荷物整理と空港へ戻る準備",
-    packDetails: "預け荷物の受取、チェックアウト、補給、駅までの移動を含みます。",
+    packDetails: "預け荷物の受取、チェックアウト、ちょっとした買い物（軽食や飲み物など）、駅までの移動を含みます。",
     return: "空港へ戻る",
-    returnDetails: "乗り場までの移動、待ち時間、一般的な交通変動を含みます。",
-    security: "チェックイン、手荷物、出国、保安検査",
+    returnDetails: "乗り場までの移動、待ち時間を含みます。通常の交通渋滞などの遅れを見込んでいます。",
+    security: "チェックイン、手荷物預け、保安検査、出国審査",
     securityDetails: "空港の混雑度に応じたカウンター、書類、出国、保安検査の時間です。",
     gate: "搭乗口へ移動し搭乗",
-    gateDetails: "搭乗口の確認、補給、搭乗待ち、締切前の余裕を含みます。",
+    gateDetails: "搭乗口の確認、ちょっとした買い物（軽食や飲み物など）、搭乗待ち。搭乗締め切りまでの余裕を見込んでいます。",
     depart: "次のフライトが出発",
     departDetails: "フライト時刻表の予定出発時刻です。",
   };

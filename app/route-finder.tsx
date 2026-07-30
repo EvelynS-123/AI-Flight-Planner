@@ -2,13 +2,51 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import NumberFlow, { continuous } from "@number-flow/react";
-import { DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
+import { DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, POPULAR_AIRPORTS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
 import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./flight-schedules";
 import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
 import AITravelWorkspace from "./ai-travel-workspace";
-import { clampDepartureDate, departureDateRange, type DepartureDateRange } from "./departure-date-range";
-import { liveRouteOptions } from "./flights/route-options";
-import type { LiveFlightSearchResult } from "./flights/types";
+import { FlightChat } from "./flight-chat";
+import type { FlightResult } from "./flight-results";
+
+function mapLiveFlightsToRouteOptions(flights: FlightResult[]): RouteOption[] {
+  return flights.map(f => {
+    const dateStr = f.departureTime.split(" ")[0]; // "2026-12-01"
+    const [year, mm] = dateStr.split("-");
+    const monthKey = `${year}-${mm}`; // "2026-12"
+    return {
+      id: f.id,
+      origin: f.origin as AirportCode,
+      destination: f.destination as AirportCode,
+      hubs: f.stopAirports,
+      ticketType: f.stops === 0 ? "direct" : f.stops === 1 ? "connection" : "multi-city",
+      stopCount: f.stops,
+      months: [monthKey],
+      total: f.price,
+      segments: [
+        {
+          from: f.origin,
+          to: f.destination,
+          price: f.price,
+          date: dateStr,
+          airline: f.airline,
+          source: f.bookingUrl ? "Google Flights" : "Mock Data",
+          url: f.bookingUrl,
+          stops: f.stops
+        }
+      ],
+      liveFlights: f.flights
+    };
+  });
+}
+
+function formatMonthLabel(monthKey: string, locale: string): string {
+  // monthKey is "YYYY-MM" or legacy "Aug"/"Sep"
+  if (monthKey === "Aug") return new Date(2026, 7, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
+  if (monthKey === "Sep") return new Date(2026, 8, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
+  const [year, mm] = monthKey.split("-").map(Number);
+  return new Date(year, mm - 1, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
+}
 import {
   DEFAULT_PREFERENCE_LEVELS,
   FAVORITE_CITY_LIMIT,
@@ -25,13 +63,6 @@ import {
 } from "./travel-preferences";
 
 const SCORE_NUMBER_PLUGINS = [continuous];
-const DEFAULT_DEPARTURE_DATE = "2026-09-15";
-
-type FlightSearchState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "ready"; result: LiveFlightSearchResult }
-  | { status: "fallback"; code?: string };
 
 function OriginalArtDefs() {
   return (
@@ -104,7 +135,7 @@ function Arrow() {
 function ticketCopy(route: RouteOption, copy: Copy) {
   if (route.ticketType === "direct") return { label: copy.direct, detail: copy.directDetail };
   if (route.ticketType === "connection") return { label: copy.connection, detail: copy.connectionDetail(route.stopCount) };
-  return { label: copy.multiCity, detail: copy.multiCityDetail(route.segments.length) };
+  return { label: copy.multiCity(route.segments.length), detail: copy.multiCityDetail(route.segments.length) };
 }
 
 const DURATION_UNITS: Record<Locale, { day: string; hour: string; minute: string }> = {
@@ -137,10 +168,7 @@ export default function RouteFinder() {
   const [destination, setDestination] = useState<AirportCode>("LAX");
   const [draftOrigin, setDraftOrigin] = useState<AirportCode>("PVG");
   const [draftDestination, setDraftDestination] = useState<AirportCode>("LAX");
-  const [departureDate, setDepartureDate] = useState(DEFAULT_DEPARTURE_DATE);
-  const [draftDepartureDate, setDraftDepartureDate] = useState(DEFAULT_DEPARTURE_DATE);
-  const [selectableDepartureDates, setSelectableDepartureDates] = useState<DepartureDateRange | null>(null);
-  const [flightSearch, setFlightSearch] = useState<FlightSearchState>({ status: "idle" });
+  const [month, setMonth] = useState<string>("Sep");
   const [weights, setWeights] = useState<RouteWeights>({ price: 30, interest: 35, directness: 35 });
   const [stopoverSelections, setStopoverSelections] = useState<StopoverSelections>({});
   const [travelPreferences, setTravelPreferences] = useState<TravelPreferenceState | null>(null);
@@ -152,12 +180,16 @@ export default function RouteFinder() {
   const [closingRouteId, setClosingRouteId] = useState<string | null>(null);
   const [aiRouteId, setAiRouteId] = useState<string | null>(null);
   const [aiOriginRect, setAiOriginRect] = useState<DOMRect | null>(null);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [liveFlights, setLiveFlights] = useState<RouteOption[] | null>(null);
   const [searched, setSearched] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isDraggingWeights, setIsDraggingWeights] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
   const closingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeSwitchToken = useRef(0);
-  const flightSearchToken = useRef(0);
   const expandAnchor = useRef<{ id: string; top: number; startedAt: number } | null>(null);
   const expandAnchorFrame = useRef<number | null>(null);
   const previousScrollBehavior = useRef("");
@@ -172,14 +204,6 @@ export default function RouteFinder() {
   const quizPanelRef = useRef<HTMLElement>(null);
   const copy = COPY[locale];
   const localeOption = LOCALE_OPTIONS.find((item) => item.code === locale)!;
-  const month: "Aug" | "Sep" = departureDate.slice(5, 7) === "08" ? "Aug" : "Sep";
-
-  useEffect(() => {
-    const range = departureDateRange();
-    setSelectableDepartureDates(range);
-    setDepartureDate((current) => clampDepartureDate(current, range));
-    setDraftDepartureDate((current) => clampDepartureDate(current, range));
-  }, []);
 
   const personalizedAttractiveness = useMemo(
     () => travelPreferences?.mode === "personalized" ? buildPersonalizedAttractiveness(travelPreferences) : undefined,
@@ -187,30 +211,14 @@ export default function RouteFinder() {
   );
 
   const results = useMemo(() => {
-    const snapshots = ROUTES.filter((route) => (
-      route.origin === origin
-      && route.destination === destination
-      && route.months.includes(month)
-    ));
-    const liveResult = flightSearch.status === "ready"
-      && flightSearch.result.request.origin === origin
-      && flightSearch.result.request.destination === destination
-      && flightSearch.result.request.departureDate === departureDate
-      ? liveRouteOptions(flightSearch.result, month)
-      : null;
-    const matched = liveResult
-      ? [
-        ...liveResult,
-        ...snapshots.filter((route) => route.ticketType === "multi-city"),
-      ]
-      : snapshots;
+    const matched = liveFlights || ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
     const scored = scoreRoutes(matched, weights, stopoverSelections, personalizedAttractiveness);
     if (isDraggingWeights && dragOrder.current) {
       const positions = new Map(dragOrder.current.map((id, index) => [id, index]));
       return scored.sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
     }
-    return scored.sort((a, b) => b.scores.total - a.scores.total || a.total - b.total);
-  }, [origin, destination, departureDate, month, weights, stopoverSelections, personalizedAttractiveness, isDraggingWeights, flightSearch]);
+    return scored.sort((a, b) => b.scores.total - a.scores.total || (a.total ?? Number.MAX_SAFE_INTEGER) - (b.total ?? Number.MAX_SAFE_INTEGER));
+  }, [liveFlights, origin, destination, month, weights, stopoverSelections, personalizedAttractiveness, isDraggingWeights]);
 
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
@@ -291,6 +299,10 @@ export default function RouteFinder() {
     if (closingTimer.current) clearTimeout(closingTimer.current);
     if (expandAnchorFrame.current !== null) cancelAnimationFrame(expandAnchorFrame.current);
     document.documentElement.style.scrollBehavior = previousScrollBehavior.current;
+  }, []);
+
+  useEffect(() => {
+    setIsClient(true);
   }, []);
 
   useEffect(() => {
@@ -493,60 +505,34 @@ export default function RouteFinder() {
     }, 500);
   }
 
-  async function search() {
-    const nextOrigin = draftOrigin;
-    const nextDestination = draftDestination;
-    const nextDepartureDate = draftDepartureDate;
-    const token = ++flightSearchToken.current;
-    setOrigin(nextOrigin);
-    setDestination(nextDestination);
-    setDepartureDate(nextDepartureDate);
+  function extractAirportCode(input: string): string {
+    const match = input.match(/^([A-Za-z]{3})\s*·/);
+    if (match) return match[1].toUpperCase();
+    const codeMatch = input.match(/^[A-Za-z]{3}$/);
+    if (codeMatch) return codeMatch[0].toUpperCase();
+    return input;
+  }
+
+  function search() {
+    setIsLoading(true);
     setExpanded(null);
     setSearched(true);
-    setFlightSearch({ status: "loading" });
-    try {
-      const response = await fetch("/api/flights/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          origin: nextOrigin,
-          destination: nextDestination,
-          departureDate: nextDepartureDate,
-          adults: 1,
-          currency: "USD",
-        }),
-      });
-      const payload = await response.json() as LiveFlightSearchResult & {
-        error?: string;
-        code?: string;
-      };
-      if (!response.ok) {
-        const error = new Error(payload.error || "Flight search failed.") as Error & {
-          code?: string;
-        };
-        error.code = payload.code;
-        throw error;
-      }
-      if (token !== flightSearchToken.current) return;
-      setFlightSearch({ status: "ready", result: payload });
-    } catch (error) {
-      if (token !== flightSearchToken.current) return;
-      setFlightSearch({
-        status: "fallback",
-        code: error instanceof Error && "code" in error
-          ? String((error as Error & { code?: string }).code || "")
-          : undefined,
-      });
-    }
+    
+    // Simulate API fetch delay for the Skeleton UI to show properly,
+    // since we fallback to local static data in this demo.
+    setTimeout(() => {
+      setLiveFlights(null); 
+      setOrigin(extractAirportCode(draftOrigin));
+      setDestination(extractAirportCode(draftDestination));
+      setIsLoading(false);
+    }, 1200);
   }
 
   function swap() {
-    if (DESTINATIONS.includes(draftOrigin) && ORIGINS.includes(draftDestination)) {
-      const nextOrigin = draftDestination;
-      const nextDestination = draftOrigin;
-      setDraftOrigin(nextOrigin);
-      setDraftDestination(nextDestination);
-    }
+    const nextOrigin = draftDestination;
+    const nextDestination = draftOrigin;
+    setDraftOrigin(nextOrigin);
+    setDraftDestination(nextDestination);
   }
 
   function storePreferences(next: TravelPreferenceState) {
@@ -616,8 +602,8 @@ export default function RouteFinder() {
   return (
     <>
     <main
-      className={`planner ${quizOpen ? "preference-open" : ""} ${aiRoute ? "ai-workspace-open" : ""}`}
-      aria-hidden={quizOpen || Boolean(aiRoute) || undefined}
+      className={`planner ${(quizOpen || isChatOpen) ? "preference-open" : ""} ${aiRoute ? "ai-workspace-open" : ""}`}
+      aria-hidden={quizOpen || isChatOpen || Boolean(aiRoute) || undefined}
     >
       <OriginalArtDefs />
       <header className="topbar">
@@ -626,6 +612,7 @@ export default function RouteFinder() {
           <span>AI Flight Planner</span>
         </a>
         <div className="topbar-actions">
+          <button className="preferences-button" type="button" onClick={() => setIsChatOpen(true)}><span aria-hidden="true">🤖</span>AI Assistant</button>
           <button className="preferences-button" type="button" onClick={openPreferences}><span aria-hidden="true">✦</span>{copy.preferences}</button>
           <span className="demo-badge">{copy.demoBadge}</span>
           <label className="language-picker">
@@ -650,56 +637,47 @@ export default function RouteFinder() {
         </div>
 
         <div className="search-card" aria-label={copy.searchAria}>
+          <datalist id="airports-list">
+            {POPULAR_AIRPORTS.map((code) => <option key={code} value={`${code} · ${airportCity(code, locale)}`}>{code} · {airportCity(code, locale)}</option>)}
+          </datalist>
+
           <div className="field-grid">
             <label className="select-field">
               <span>{copy.from}</span>
-              <select aria-label={copy.from} value={draftOrigin} onChange={(event) => setDraftOrigin(event.target.value as AirportCode)}>
-                {ORIGINS.map((code) => <option key={code} value={code}>{code} · {airportCity(code, locale)}</option>)}
-              </select>
-            </label>
-            <button className="swap-button" type="button" onClick={swap} aria-label={copy.swap} disabled>↔</button>
-            <label className="select-field">
-              <span>{copy.to}</span>
-              <select aria-label={copy.to} value={draftDestination} onChange={(event) => setDraftDestination(event.target.value as AirportCode)}>
-                {DESTINATIONS.map((code) => <option key={code} value={code}>{code} · {airportCity(code, locale)}</option>)}
-              </select>
-            </label>
-            <label className="select-field month-field">
-              <span>{copy.departureDate}</span>
-              <input
-                aria-label={copy.departureDate}
-                type="date"
-                min={selectableDepartureDates?.min}
-                max={selectableDepartureDates?.max}
-                value={draftDepartureDate}
-                onChange={(event) => setDraftDepartureDate(event.target.value)}
+              <input 
+                type="text" 
+                aria-label={copy.from} 
+                list="airports-list"
+                value={draftOrigin} 
+                onChange={(event) => setDraftOrigin(event.target.value)} 
+                placeholder="PVG, LHR, 伦敦..."
               />
             </label>
-            <button
-              className="search-button"
-              type="button"
-              onClick={search}
-              disabled={flightSearch.status === "loading"}
-            >
-              {flightSearch.status === "loading" ? copy.searchingFlights : copy.search}
-            </button>
+            <button className="swap-button" type="button" onClick={swap} aria-label={copy.swap}>↔</button>
+            <label className="select-field">
+              <span>{copy.to}</span>
+              <input 
+                type="text" 
+                aria-label={copy.to} 
+                list="airports-list"
+                value={draftDestination} 
+                onChange={(event) => setDraftDestination(event.target.value)} 
+                placeholder="LAX, CDG, 巴黎..."
+              />
+            </label>
+            <label className="select-field month-field">
+              <span>{copy.month}</span>
+              <select aria-label={copy.month} value={month} onChange={(event) => { setMonth(event.target.value); setLiveFlights(null); }}>
+                <option value="Aug">{formatMonthLabel("Aug", localeOption.intl)}</option>
+                <option value="Sep">{formatMonthLabel("Sep", localeOption.intl)}</option>
+                {month !== "Aug" && month !== "Sep" && (
+                  <option value={month}>{formatMonthLabel(month, localeOption.intl)}</option>
+                )}
+              </select>
+            </label>
+            <button className="search-button" type="button" onClick={search}>{copy.search}</button>
           </div>
-          <p className={`search-note ${flightSearch.status}`}>
-            <span aria-hidden="true">◉</span>
-            {flightSearch.status === "ready"
-              ? copy.liveSearchReady(
-                new Intl.DateTimeFormat(localeOption.intl, {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }).format(new Date(flightSearch.result.searchedAt)),
-                flightSearch.result.cached,
-              )
-              : flightSearch.status === "fallback"
-                ? copy.liveSearchFallback
-                : flightSearch.status === "loading"
-                  ? copy.searchingFlights
-                  : copy.searchNote}
-          </p>
+          <p className="search-note"><span aria-hidden="true">◉</span> {copy.searchNote}</p>
         </div>
       </section>
 
@@ -760,11 +738,23 @@ export default function RouteFinder() {
             </div>
           )}
 
-          {results.length === 0 ? (
+          {results.length === 0 && !isLoading ? (
             <div className="empty-state">
               <span aria-hidden="true">⌁</span>
               <h3>{copy.emptyTitle}</h3>
               <p>{copy.emptyBody}</p>
+            </div>
+          ) : !isClient ? (
+            <div className="route-list" style={{ minHeight: "50vh" }} aria-hidden="true">
+              {/* Placeholder to maintain height during hydration */}
+            </div>
+          ) : isLoading ? (
+            <div className="route-list skeleton-list" aria-hidden="true">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="route-card skeleton-card">
+                   <div className="skeleton-shimmer"></div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="route-list">
@@ -780,8 +770,8 @@ export default function RouteFinder() {
                       <div className="route-main">
                         <div className="route-codes">
                           <strong>{route.origin}</strong>
-                          {route.hubs.map((hub) => (
-                            <span className="route-hop" key={hub}>
+                          {route.hubs.map((hub, hubIndex) => (
+                            <span className="route-hop" key={`${hub}-${hubIndex}`}>
                               <Arrow />
                               <span
                                 className={`hub-code ${route.ticketType === "connection" ? "connection-hub" : "multi-city-hub"}`}
@@ -802,7 +792,7 @@ export default function RouteFinder() {
                       </div>
                       <div className="score-block">
                         <span>{copy.liveScore}</span>
-                        <strong>
+                        <strong suppressHydrationWarning>
                           <NumberFlow
                             className="score-number"
                             value={Math.round(route.scores.total)}
@@ -816,19 +806,35 @@ export default function RouteFinder() {
                         </strong>
                       </div>
                       <div className="price-block">
-                        <span>{route.liveSchedule ? copy.liveTotal : copy.sampleTotal}</span>
-                        <strong>${route.total.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })}</strong>
+                        <span>{copy.sampleTotal}</span>
+                        <strong suppressHydrationWarning>{route.total != null ? `$${route.total.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })}` : '---'}</strong>
                       </div>
                       <span className="disclosure" aria-hidden="true">⌄</span>
                     </button>
 
                     <div className="route-details" aria-hidden={!isOpen}>
                       {keepDetailsMounted && <div className="details-inner" inert={!isOpen}>
+                        <div className="details-actions">
+                          <button 
+                            className="share-button" 
+                            type="button" 
+                            onClick={async () => {
+                              const priceText = route.total != null ? `$${route.total}` : (locale === 'en' ? 'Unknown' : '価格不明');
+                              const text = `✈️ ${locale === 'en' ? 'Route' : '冒険ルート'}: ${route.origin} → ${route.destination} (${locale === 'en' ? 'via' : '経由'}: ${route.hubs.join(', ') || (locale === 'en' ? 'Direct' : '直行便')}) | ${locale === 'en' ? 'Duration' : '所要時間'}: ${localizeDuration(route.totalDurationMinutes, locale)} | ${locale === 'en' ? 'Price' : '価格'}: ${priceText}`;
+                              await navigator.clipboard.writeText(text);
+                              setCopiedId(route.id);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+                            {copiedId === route.id ? (locale === "zh" ? "已复制！" : locale === "ja" ? "コピーしました！" : locale === "ko" ? "복사되었습니다!" : "Copied!") : (locale === "zh" ? "分享" : locale === "ja" ? "シェア" : locale === "ko" ? "공유하기" : "Share")}
+                          </button>
+                        </div>
                         <div className="warning-strip">
                           <span aria-hidden="true">!</span>
                           {route.ticketType === "multi-city" && <p>{copy.multiCityWarning}</p>}
-                          {route.ticketType === "connection" && <p>{route.liveSchedule ? copy.liveFareWarning : copy.connectionWarning}</p>}
-                          {route.ticketType === "direct" && <p>{route.liveSchedule ? copy.liveFareWarning : copy.directWarning}</p>}
+                          {route.ticketType === "connection" && <p>{copy.connectionWarning}</p>}
+                          {route.ticketType === "direct" && <p>{copy.directWarning}</p>}
                         </div>
                         {route.scheduledStops.length > 0 && (
                           <div className="stopover-plans">
@@ -880,7 +886,7 @@ export default function RouteFinder() {
                             <section className="flight-ticket" key={ticketItem.ticketIndex}>
                               <div className="ticket-heading">
                                 <strong>{copy.ticket} {ticketItem.ticketIndex + 1}</strong>
-                                <span>${ticketItem.price.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })} · {localizeDateLabel(ticketItem.fareDate, locale)}</span>
+                                <span suppressHydrationWarning>{ticketItem.price != null ? `$${ticketItem.price.toLocaleString(localeOption.intl, { maximumFractionDigits: 2 })}` : '---'} · {localizeDateLabel(ticketItem.fareDate, locale)}</span>
                                 <a href={ticketItem.fareUrl} target="_blank" rel="noreferrer">{copy.view} {ticketItem.fareSource} ↗</a>
                               </div>
                               <div className="flights">
@@ -888,7 +894,7 @@ export default function RouteFinder() {
                                   <div className="flight-row" key={`${flight.id}-${flight.departureUtc}`}>
                                     <div className="flight-index">{ticketItem.ticketIndex + 1}.{flightIndex + 1}</div>
                                     <div className="airline-brand">
-                                      <img src={flight.logoUrl} alt={`${flight.airlineName} logo`} width="48" height="32" />
+                                      <img src={flight.logoUrl} alt={`${flight.airlineName} logo`} width="48" height="32" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                       <span><strong>{flight.airlineName}</strong><small>{flight.flightNumber}</small></span>
                                     </div>
                                     <div className="flight-timeline">
@@ -903,14 +909,8 @@ export default function RouteFinder() {
                                       </div>
                                     </div>
                                     <div className="schedule-reference">
-                                      <a href={flight.scheduleSource} target="_blank" rel="noreferrer">
-                                        {route.liveSchedule ? copy.liveSource : copy.weeklySchedule} ↗
-                                      </a>
-                                      <small>
-                                        {route.liveSchedule
-                                          ? copy.liveFlight
-                                          : `${copy.operates} ${localizeWeekdays(flight.operatingDays, locale)}`}
-                                      </small>
+                                      <a href={flight.scheduleSource} target="_blank" rel="noreferrer">{copy.weeklySchedule} ↗</a>
+                                      <small>{copy.operates} {localizeWeekdays(flight.operatingDays, locale)}</small>
                                     </div>
                                   </div>
                                 ))}
@@ -1059,6 +1059,53 @@ export default function RouteFinder() {
         </section>
       </div>
     )}
+    {isChatOpen && (
+      <div className="preference-overlay" onClick={() => setIsChatOpen(false)}>
+        <section
+          className="preference-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-label="AI Flight Assistant"
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: "90%", maxWidth: "800px", height: "85vh", display: "flex", flexDirection: "column", padding: "16px" }}
+        >
+          <header className="preference-header" style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--line)" }}>
+            <h2 style={{ fontSize: "20px", color: "var(--ink)" }}>AI Flight Assistant</h2>
+            <button className="quiz-close" type="button" onClick={() => setIsChatOpen(false)} aria-label="Close chat">×</button>
+          </header>
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <FlightChat 
+              key={locale} 
+              locale={locale} 
+              weights={weights}
+              onWeightsChange={setWeights}
+              onSearchComplete={(flights) => {
+                if (flights && flights.length > 0) {
+                  const mapped = mapLiveFlightsToRouteOptions(flights);
+                  setLiveFlights(mapped);
+                  
+                  const newOrigin = flights[0].origin as AirportCode;
+                  const newDestination = flights[0].destination as AirportCode;
+                  setOrigin(newOrigin);
+                  setDestination(newDestination);
+                  setDraftOrigin(`${newOrigin} · ${airportCity(newOrigin, locale)}`);
+                  setDraftDestination(`${newDestination} · ${airportCity(newDestination, locale)}`);
+
+                  // Sync month from the first flight's departure date
+                  const depDate = flights[0].departureTime.split(" ")[0];
+                  if (depDate) {
+                    const [year, mm] = depDate.split("-");
+                    setMonth(`${year}-${mm}`);
+                  }
+                }
+                setIsChatOpen(false);
+              }}
+            />
+          </div>
+        </section>
+      </div>
+    )}
     </>
   );
 }
+

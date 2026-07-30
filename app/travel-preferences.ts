@@ -20,17 +20,27 @@ export const DEFAULT_PREFERENCE_LEVELS: PreferenceLevels = {
 };
 
 export const DEFAULT_CITY_ATTRACTIVENESS: Record<string, number> = {
-  HNL: 98,
+  HNL: 100,
+  SIN: 90,
   NRT: 88,
   HKG: 86,
   KIX: 86,
-  TPE: 84,
+  TPE: 85,
+  BKK: 85,
+  CDG: 85,
+  LHR: 85,
   ICN: 82,
   YVR: 82,
+  SFO: 80,
+  SEA: 80,
+  LAX: 80,
+  AMS: 80,
+  KUL: 80,
   PEK: 80,
   MNL: 78,
   CAN: 76,
   WUH: 74,
+  FRA: 70,
 };
 
 // These profiles describe what each city offers. They are not final
@@ -38,16 +48,25 @@ export const DEFAULT_CITY_ATTRACTIVENESS: Record<string, number> = {
 // determine the result without giving any city an automatic advantage.
 const CITY_TRAITS: Record<string, PreferenceLevels> = {
   HNL: { food: 20, culture: 15, nature: 55, urban: 10 },
+  SIN: { food: 35, culture: 20, nature: 20, urban: 25 },
   NRT: { food: 25, culture: 25, nature: 10, urban: 40 },
   HKG: { food: 30, culture: 15, nature: 10, urban: 45 },
   KIX: { food: 30, culture: 35, nature: 15, urban: 20 },
   TPE: { food: 30, culture: 25, nature: 20, urban: 25 },
+  BKK: { food: 40, culture: 30, nature: 10, urban: 20 },
+  CDG: { food: 30, culture: 40, nature: 10, urban: 20 },
+  LHR: { food: 20, culture: 35, nature: 15, urban: 30 },
   ICN: { food: 25, culture: 20, nature: 15, urban: 40 },
   YVR: { food: 20, culture: 15, nature: 40, urban: 25 },
+  SFO: { food: 25, culture: 25, nature: 20, urban: 30 },
+  LAX: { food: 20, culture: 25, nature: 25, urban: 30 },
+  AMS: { food: 25, culture: 30, nature: 25, urban: 20 },
+  KUL: { food: 35, culture: 25, nature: 15, urban: 25 },
   PEK: { food: 20, culture: 45, nature: 10, urban: 25 },
   MNL: { food: 25, culture: 25, nature: 30, urban: 20 },
   CAN: { food: 35, culture: 20, nature: 15, urban: 30 },
   WUH: { food: 25, culture: 35, nature: 20, urban: 20 },
+  FRA: { food: 20, culture: 30, nature: 15, urban: 35 },
 };
 
 export const QUIZ_CITY_CODES = Object.keys(CITY_TRAITS);
