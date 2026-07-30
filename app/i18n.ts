@@ -92,8 +92,11 @@ export type Copy = {
   tripFare: string;
   sourceFare: string;
   chatGreeting: string;
+  chatAssistantHint: string;
   chatPlaceholder: string;
   chatSend: string;
+  chatClose: string;
+  chatReopen: string;
   chatSearching: string;
   chatResultsTitle: (count: number) => string;
   chatNoResults: string;
@@ -196,8 +199,11 @@ export const COPY: Record<Locale, Copy> = {
     tripFare: "Trip.com 票价",
     sourceFare: "原始报价",
     chatGreeting: "你好！我是 Via 航线助手。告诉我你想去哪里，我来帮你找实时航班和价格。",
+    chatAssistantHint: "用自然语言描述你的航程",
     chatPlaceholder: "例如：9月份从东京去洛杉矶…",
     chatSend: "发送",
+    chatClose: "收起航线助手",
+    chatReopen: "继续和 Via 航线助手对话",
     chatSearching: "正在搜索实时航班信息…",
     chatResultsTitle: (count) => `找到 ${count} 个航班`,
     chatNoResults: "未找到符合条件的航班，请尝试调整日期或目的地。",
@@ -298,8 +304,11 @@ export const COPY: Record<Locale, Copy> = {
     tripFare: "Trip.com fare",
     sourceFare: "source fare",
     chatGreeting: "Hi! I'm the Via flight assistant. Tell me where you'd like to go and I'll find real-time flights and prices for you.",
+    chatAssistantHint: "Describe your trip naturally",
     chatPlaceholder: "e.g. Tokyo to LA in September…",
     chatSend: "Send",
+    chatClose: "Collapse flight assistant",
+    chatReopen: "Continue with the Via flight assistant",
     chatSearching: "Searching for real-time flights…",
     chatResultsTitle: (count) => `Found ${count} flight${count === 1 ? "" : "s"}`,
     chatNoResults: "No flights found for those dates. Try adjusting your dates or destination.",
@@ -400,8 +409,11 @@ export const COPY: Record<Locale, Copy> = {
     tripFare: "Trip.com 운임",
     sourceFare: "원문 운임",
     chatGreeting: "안녕하세요! Via 항공편 어시스턴트입니다. 어디로 여행하고 싶으신지 알려주시면 실시간 항공편과 가격을 찾아드리겠습니다.",
+    chatAssistantHint: "자연스러운 문장으로 여정을 알려 주세요",
     chatPlaceholder: "예: 9월에 도쿄에서 LA로…",
     chatSend: "보내기",
+    chatClose: "항공편 어시스턴트 접기",
+    chatReopen: "Via 항공편 어시스턴트와 계속 대화",
     chatSearching: "실시간 항공편을 검색 중…",
     chatResultsTitle: (count) => `${count}개 항공편 발견`,
     chatNoResults: "해당 조건의 항공편을 찾지 못했습니다. 날짜나 목적지를 조정해 보세요.",
@@ -502,8 +514,11 @@ export const COPY: Record<Locale, Copy> = {
     tripFare: "Trip.com 運賃",
     sourceFare: "元の運賃",
     chatGreeting: "こんにちは！Via フライトアシスタントです。行きたい場所を教えていただければ、リアルタイムの航空券と価格をお探しします。",
+    chatAssistantHint: "自然な言葉で旅程を教えてください",
     chatPlaceholder: "例: 9月に東京からLAへ…",
     chatSend: "送信",
+    chatClose: "フライトアシスタントを閉じる",
+    chatReopen: "Via フライトアシスタントと会話を続ける",
     chatSearching: "リアルタイムの航空券を検索中…",
     chatResultsTitle: (count) => `${count}件のフライトが見つかりました`,
     chatNoResults: "条件に合うフライトが見つかりませんでした。日程や目的地を調整してみてください。",
