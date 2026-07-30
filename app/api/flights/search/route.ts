@@ -626,7 +626,7 @@ function getSampledDates(startStr: string, endStr: string): string[] {
 async function executeQuery(url: string, onProviderRequest?: () => void) {
   const cacheTtlMilliseconds = Math.max(
     0,
-    Number(process.env.FLIGHT_SEARCH_CACHE_TTL_MS || 1800000),
+    Number(process.env.FLIGHT_SEARCH_CACHE_TTL_MS || 604800000),
   );
 
   const canonicalUrl = new URL(url);
