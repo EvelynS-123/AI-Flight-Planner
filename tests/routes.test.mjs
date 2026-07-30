@@ -42,6 +42,7 @@ import {
   buildPersonalizedAttractiveness,
   defaultTravelPreferences,
   personalizedTravelPreferences,
+  sanitizeTravelPreferences,
 } from "../app/travel-preferences.ts";
 
 function buildTravelPlanRequest(
@@ -579,6 +580,100 @@ test("route ranking still reacts to the three user weights", () => {
     interest: 47,
     directness: 33,
   });
+  assert.ok(Math.abs(cheap[0].scores.total - cheap[0].scores.price) < 1e-9);
+  assert.ok(Math.abs(fun[0].scores.total - fun[0].scores.interest) < 1e-9);
+  assert.ok(Math.abs(direct[0].scores.total - direct[0].scores.directness) < 1e-9);
+});
+
+test("preference memory migrates v1 data and sanitizes detailed v2 fields", () => {
+  const migrated = sanitizeTravelPreferences({
+    version: 1,
+    mode: "personalized",
+    categories: { food: 5, culture: 2, nature: 1, urban: 4 },
+    favoriteCities: ["TPE"],
+  });
+  assert.equal(migrated.version, 2);
+  assert.equal(migrated.categories.food, 5);
+  assert.deepEqual(migrated.favoriteCities, ["TPE"]);
+
+  const detailed = sanitizeTravelPreferences({
+    ...defaultTravelPreferences(),
+    version: 2,
+    mode: "personalized",
+    interests: [
+      { tag: "street-food", strength: 5 },
+      { tag: "not-a-real-tag", strength: 5 },
+    ],
+    departureWindows: [{ startHour: 22, endHour: 4, strength: 9 }],
+    hardConstraints: {
+      avoidOvernight: true,
+      avoidSelfTransfer: true,
+      maxStops: 1,
+      excludedAirlines: ["Example Air"],
+    },
+  });
+  assert.deepEqual(detailed.interests, [{ tag: "street-food", strength: 5 }]);
+  assert.deepEqual(detailed.departureWindows, [{ startHour: 22, endHour: 4, strength: 5 }]);
+  assert.equal(detailed.hardConstraints.avoidOvernight, true);
+  assert.equal(detailed.hardConstraints.maxStops, 1);
+});
+
+test("personalized ranking is deterministic and filters explicit hard constraints", () => {
+  const pvgLax = ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX");
+  const first = scoreRoutes(pvgLax).map((route) => [route.id, route.scores]);
+  const second = scoreRoutes(pvgLax).map((route) => [route.id, route.scores]);
+  assert.deepEqual(first, second);
+
+  const hardPreferences = sanitizeTravelPreferences({
+    ...defaultTravelPreferences(),
+    version: 2,
+    mode: "personalized",
+    hardConstraints: {
+      ...defaultTravelPreferences().hardConstraints,
+      avoidSelfTransfer: true,
+      departureWindows: [{ startHour: 18, endHour: 20, strength: 5 }],
+    },
+  });
+  const filtered = scoreRoutes(
+    pvgLax,
+    { price: 30, interest: 35, directness: 35 },
+    {},
+    undefined,
+    hardPreferences,
+  );
+  assert.ok(filtered.length > 0);
+  assert.ok(filtered.every((route) => route.ticketType !== "multi-city"));
+  assert.ok(filtered.every((route) => route.scheduledTickets[0].flights[0].departureTime.startsWith("18:")));
+});
+
+test("time and comfort affect directness while airlines affect interest", () => {
+  const pvgLax = ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX");
+  const preferences = sanitizeTravelPreferences({
+    ...defaultTravelPreferences(),
+    version: 2,
+    mode: "personalized",
+    departureWindows: [{ startHour: 18, endHour: 20, strength: 5 }],
+    selfTransferPreference: "avoid",
+    preferredAirlines: [{ value: "JL", strength: 5 }],
+  });
+  const ranked = scoreRoutes(
+    pvgLax,
+    { price: 30, interest: 35, directness: 35 },
+    {},
+    undefined,
+    preferences,
+  );
+  const direct = ranked.find((route) => route.id === "graph-pvg-lax");
+  const jal = ranked.find((route) => route.scheduledTickets.some(
+    (ticket) => ticket.flights.some((flight) => flight.airlineCode === "JL"),
+  ));
+  const nonJal = ranked.find((route) => route.scheduledTickets.every(
+    (ticket) => ticket.flights.every((flight) => flight.airlineCode !== "JL"),
+  ));
+  assert.equal(direct.scores.scheduleMatch, 100);
+  assert.equal(direct.scores.comfortMatch, 100);
+  assert.equal(jal.scores.airlineMatch, 100);
+  assert.equal(nonJal.scores.airlineMatch, 0);
 });
 
 test("all four locales cover the interface and airports", () => {

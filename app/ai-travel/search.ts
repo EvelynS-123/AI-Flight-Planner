@@ -71,10 +71,15 @@ function compactText(value: string, limit = 260) {
 }
 
 function preferenceTerms(request: TravelPlanRequest) {
-  return Object.entries(request.preferences.categories)
+  const categories = Object.entries(request.preferences.categories)
     .sort((a, b) => b[1] - a[1])
     .map(([category]) => category)
-    .join(", ");
+    .slice(0, 3);
+  const detailedInterests = [...request.preferences.interests]
+    .sort((a, b) => b.strength - a.strength)
+    .map((item) => item.tag.replaceAll("-", " "))
+    .slice(0, 5);
+  return [...new Set([...detailedInterests, ...categories])].join(", ");
 }
 
 export function buildTravelSearchQueries(

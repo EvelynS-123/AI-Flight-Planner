@@ -4,6 +4,8 @@ import test from "node:test";
 
 const routeFinderSource = await readFile(new URL("../app/route-finder.tsx", import.meta.url), "utf8");
 const flightChatSource = await readFile(new URL("../app/flight-chat.tsx", import.meta.url), "utf8");
+const preferenceChatSource = await readFile(new URL("../app/preference-chat.tsx", import.meta.url), "utf8");
+const preferenceChatApiSource = await readFile(new URL("../app/api/preferences/chat/route.ts", import.meta.url), "utf8");
 const chatApiSource = await readFile(new URL("../app/api/chat/route.ts", import.meta.url), "utf8");
 const hubCharacteristicsSource = await readFile(new URL("../app/api/chat/hub-characteristics/route.ts", import.meta.url), "utf8");
 const flightSearchApiSource = await readFile(new URL("../app/api/flights/search/route.ts", import.meta.url), "utf8");
@@ -20,6 +22,17 @@ test("chat search skips the weight refinement step and collapses before searchin
   assert.doesNotMatch(flightChatSource, /WeightPanel|\/api\/chat\/analyze/);
   assert.match(flightChatSource, /setPhase\("searching"\);[\s\S]*onSearchStart\(\);[\s\S]*searchFlights\(submittedParams\)/);
   assert.match(routeFinderSource, /function beginChatSearch\(\)[\s\S]*setIsChatOpen\(false\)/);
+});
+
+test("preference chatbot replaces numeric quiz without removing manual route weights", () => {
+  assert.match(routeFinderSource, /<PreferenceChat/);
+  assert.doesNotMatch(routeFinderSource, /preference-scale|PREFERENCE_CATEGORIES\.map/);
+  assert.match(routeFinderSource, /moveBoundaryFromKeyboard/);
+  assert.match(routeFinderSource, /className=\{`weight-panel/);
+  assert.match(preferenceChatSource, /\/api\/preferences\/chat/);
+  assert.match(preferenceChatSource, /readyToSave/);
+  assert.match(preferenceChatApiSource, /Ask exactly one short, useful question per turn/);
+  assert.match(preferenceChatApiSource, /Distinguish soft preferences from explicit hard constraints/);
 });
 
 test("chat component remains mounted while its interface is collapsed", () => {

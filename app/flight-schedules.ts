@@ -1,5 +1,10 @@
 import type { RouteOption, RouteWeights, Segment } from "./route-data";
-import { DEFAULT_CITY_ATTRACTIVENESS } from "./travel-preferences.ts";
+import {
+  DEFAULT_CITY_ATTRACTIVENESS,
+  type PreferenceTimeWindow,
+  type TravelPreferenceState,
+  type WeightedTextPreference,
+} from "./travel-preferences.ts";
 
 type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -54,6 +59,9 @@ export type RouteScores = {
   stops: number;
   duration: number;
   convenience: number;
+  scheduleMatch: number | null;
+  comfortMatch: number | null;
+  airlineMatch: number | null;
 };
 
 export type RankedRouteOption = RouteOption & {
@@ -575,15 +583,223 @@ function crossesLocalMidnight(stop: ScheduledStop) {
   return utcToLocal(stop.arrivalUtc, stop.airport).date !== utcToLocal(stop.departureUtc, stop.airport).date;
 }
 
+function parseHour(value: string) {
+  const match = value.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hour = Number(match[1]) + Number(match[2]) / 60;
+  return Number.isFinite(hour) ? hour : null;
+}
+
+function isHourInWindow(hour: number, window: PreferenceTimeWindow) {
+  return window.startHour < window.endHour
+    ? hour >= window.startHour && hour < window.endHour
+    : hour >= window.startHour || hour < window.endHour;
+}
+
+function hourDistance(left: number, right: number) {
+  const difference = Math.abs(left - right) % 24;
+  return Math.min(difference, 24 - difference);
+}
+
+function timePreferenceScore(hour: number | null, windows: PreferenceTimeWindow[]) {
+  if (hour === null || !windows.length) return null;
+  let weightedScore = 0;
+  let totalStrength = 0;
+  for (const window of windows) {
+    const score = isHourInWindow(hour, window)
+      ? 100
+      : Math.max(0, 100 - Math.min(
+        hourDistance(hour, window.startHour),
+        hourDistance(hour, window.endHour),
+      ) * 20);
+    weightedScore += score * window.strength;
+    totalStrength += window.strength;
+  }
+  return totalStrength ? weightedScore / totalStrength : null;
+}
+
+function normalizeAirline(value: string) {
+  return value.toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+const AIRLINE_ALIASES: Record<string, string[]> = {
+  jal: ["JL", "Japan Airlines"],
+  ana: ["NH", "All Nippon Airways"],
+  cathay: ["CX", "Cathay Pacific"],
+  "korean air": ["KE", "Korean Air"],
+  delta: ["DL", "Delta Air Lines"],
+  united: ["UA", "United Airlines"],
+  starlux: ["JX", "STARLUX Airlines"],
+  zipair: ["ZG", "ZIPAIR Tokyo"],
+};
+
+function flightMatchesAirline(flight: ScheduledFlight, preference: string) {
+  const needle = normalizeAirline(preference);
+  if (!needle) return false;
+  const code = normalizeAirline(flight.airlineCode);
+  const name = normalizeAirline(flight.airlineName);
+  const aliases = AIRLINE_ALIASES[needle] ?? [];
+  return needle === code
+    || needle === name
+    || name.includes(needle)
+    || needle.includes(name)
+    || aliases.some((alias) => {
+      const normalized = normalizeAirline(alias);
+      return normalized === code || normalized === name;
+    });
+}
+
+const AIRLINE_ALLIANCES: Record<string, string[]> = {
+  oneworld: ["AA", "AS", "BA", "CX", "JL", "MH", "QF", "QR", "RJ", "UL"],
+  "star alliance": ["AC", "AI", "CA", "LH", "NH", "OZ", "SQ", "TG", "TK", "UA"],
+  staralliance: ["AC", "AI", "CA", "LH", "NH", "OZ", "SQ", "TG", "TK", "UA"],
+  skyteam: ["AF", "AM", "CI", "DL", "GA", "KE", "KL", "KQ", "ME", "MU", "SV", "VN", "VS", "MF"],
+};
+
+function weightedAirlineMatch(
+  flights: ScheduledFlight[],
+  preferences: WeightedTextPreference[],
+) {
+  if (!preferences.length) return null;
+  const totalStrength = preferences.reduce((sum, item) => sum + item.strength, 0);
+  const matchedStrength = preferences.reduce((sum, item) => (
+    flights.some((flight) => flightMatchesAirline(flight, item.value))
+      ? sum + item.strength
+      : sum
+  ), 0);
+  return totalStrength ? 100 * matchedStrength / totalStrength : null;
+}
+
+function allianceMatch(
+  flights: ScheduledFlight[],
+  preferences: WeightedTextPreference[],
+) {
+  if (!preferences.length) return null;
+  const totalStrength = preferences.reduce((sum, item) => sum + item.strength, 0);
+  const matchedStrength = preferences.reduce((sum, item) => {
+    const members = AIRLINE_ALLIANCES[normalizeAirline(item.value)] ?? [];
+    return flights.some((flight) => members.includes(flight.airlineCode.toUpperCase()))
+      ? sum + item.strength
+      : sum;
+  }, 0);
+  return totalStrength ? 100 * matchedStrength / totalStrength : null;
+}
+
+function scoreAirlinePreference(
+  schedule: NonNullable<ReturnType<typeof buildSchedule>>,
+  preferences: TravelPreferenceState | undefined,
+) {
+  if (!preferences || preferences.mode !== "personalized") return null;
+  const flights = schedule.scheduledTickets.flatMap((ticket) => ticket.flights);
+  const positive = weightedAirlineMatch(flights, preferences.preferredAirlines);
+  const alliance = allianceMatch(flights, preferences.preferredAlliances);
+  const avoided = weightedAirlineMatch(flights, preferences.avoidedAirlines);
+  const components = [positive, alliance].filter((value): value is number => value !== null);
+  if (!components.length && avoided === null) return null;
+  const positiveScore = components.length ? average(components) : 50;
+  return Math.max(0, Math.min(100, avoided === null ? positiveScore : positiveScore - avoided * 0.6));
+}
+
+function routeMatchesHardConstraints(
+  route: RouteOption,
+  schedule: NonNullable<ReturnType<typeof buildSchedule>>,
+  preferences: TravelPreferenceState | undefined,
+) {
+  if (!preferences || preferences.mode !== "personalized") return true;
+  const hard = preferences.hardConstraints;
+  const flights = schedule.scheduledTickets.flatMap((ticket) => ticket.flights);
+  const firstFlight = flights[0];
+  const lastFlight = flights.at(-1);
+  const departureHour = firstFlight ? parseHour(firstFlight.departureTime) : null;
+  const arrivalHour = lastFlight ? parseHour(lastFlight.arrivalTime) : null;
+
+  if (hard.avoidOvernight && schedule.scheduledStops.some(crossesLocalMidnight)) return false;
+  if (hard.avoidSelfTransfer && route.ticketType === "multi-city") return false;
+  if (hard.maxStops !== null && route.stopCount > hard.maxStops) return false;
+  if (
+    hard.maxLayoverHours !== null
+    && schedule.scheduledStops.some((stop) => stop.durationMinutes / 60 > hard.maxLayoverHours!)
+  ) return false;
+  if (
+    hard.maxTotalDurationHours !== null
+    && schedule.totalDurationMinutes / 60 > hard.maxTotalDurationHours
+  ) return false;
+  if (
+    hard.departureWindows.length
+    && (departureHour === null || !hard.departureWindows.some((window) => isHourInWindow(departureHour, window)))
+  ) return false;
+  if (
+    hard.arrivalWindows.length
+    && (arrivalHour === null || !hard.arrivalWindows.some((window) => isHourInWindow(arrivalHour, window)))
+  ) return false;
+  if (
+    hard.requiredAirlines.some(
+      (airline) => !flights.some((flight) => flightMatchesAirline(flight, airline)),
+    )
+  ) return false;
+  if (
+    hard.excludedAirlines.some(
+      (airline) => flights.some((flight) => flightMatchesAirline(flight, airline)),
+    )
+  ) return false;
+  return true;
+}
+
+function scoreSchedulePreference(
+  schedule: NonNullable<ReturnType<typeof buildSchedule>>,
+  preferences: TravelPreferenceState | undefined,
+) {
+  if (!preferences || preferences.mode !== "personalized") return null;
+  const flights = schedule.scheduledTickets.flatMap((ticket) => ticket.flights);
+  const departure = flights[0] ? parseHour(flights[0].departureTime) : null;
+  const arrival = flights.at(-1) ? parseHour(flights.at(-1)!.arrivalTime) : null;
+  const components = [
+    timePreferenceScore(departure, preferences.departureWindows),
+    timePreferenceScore(arrival, preferences.arrivalWindows),
+  ].filter((value): value is number => value !== null);
+
+  if (preferences.preferredLayoverHours && schedule.scheduledStops.length) {
+    const { minHours, maxHours } = preferences.preferredLayoverHours;
+    components.push(average(schedule.scheduledStops.map((stop) => {
+      const hours = stop.durationMinutes / 60;
+      if (hours >= minHours && hours <= maxHours) return 100;
+      const distance = hours < minHours ? minHours - hours : hours - maxHours;
+      return Math.max(0, 100 - distance * 15);
+    })));
+  }
+  if (preferences.overnightPreference !== "neutral") {
+    const overnight = schedule.scheduledStops.some(crossesLocalMidnight);
+    components.push(preferences.overnightPreference === "prefer"
+      ? overnight ? 100 : 20
+      : overnight ? 0 : 100);
+  }
+  return components.length ? average(components) : null;
+}
+
+function scoreComfortPreference(
+  route: RouteOption,
+  preferences: TravelPreferenceState | undefined,
+) {
+  if (!preferences || preferences.mode !== "personalized") return null;
+  if (preferences.selfTransferPreference === "neutral") return null;
+  const selfTransfer = route.ticketType === "multi-city";
+  if (preferences.selfTransferPreference === "avoid") return selfTransfer ? 0 : 100;
+  return selfTransfer ? 100 : 70;
+}
+
 export function scoreScheduledRoutes(
   routes: RouteOption[],
   weights: RouteWeights,
   selections: StopoverSelections = {},
   cityAttractiveness: Record<string, number> = DEFAULT_CITY_ATTRACTIVENESS,
+  preferences?: TravelPreferenceState,
 ): RankedRouteOption[] {
   const scheduled = routes
     .map((route) => ({ route, schedule: buildSchedule(route, selections[route.id] ?? []) }))
-    .filter((item): item is { route: RouteOption; schedule: NonNullable<ReturnType<typeof buildSchedule>> } => Boolean(item.schedule?.dataValid));
+    .filter((item): item is { route: RouteOption; schedule: NonNullable<ReturnType<typeof buildSchedule>> } => (
+      Boolean(item.schedule?.dataValid)
+      && routeMatchesHardConstraints(item.route, item.schedule!, preferences)
+    ));
   if (!scheduled.length) return [];
 
   const prices = scheduled.map(({ route }) => route.total);
@@ -594,40 +810,13 @@ export function scoreScheduledRoutes(
   const durationMax = Math.max(...durations);
 
   const rawInterests = scheduled.map(({ schedule }) => {
-    let rawInterest = Math.random() * 10; // 直行便やペナルティ時のベース (0-10点)
-
-    const isJAL = schedule.scheduledTickets.some(ticket => 
-      ticket.flights.some((f: any) => 
-        f.airlineCode === "JL" || 
-        f.airlineName?.toLowerCase().includes("japan airlines")
-      )
-    );
-    const jalBonus = isJAL ? 300 : 0;
-
-    if (schedule.scheduledStops.length > 0) {
-      let maxBonusScore = -100;
-      for (const stop of schedule.scheduledStops) {
-        const layoverHours = stop.durationMinutes / 60;
-        const stopBaseScore = cityAttractiveness[stop.airport] ?? 50;
-        let layoverMultiplier = 1.0;
-
-        // "実際に外に出れる観光時間 (5-16h)"
-        if (layoverHours >= 5 && layoverHours <= 16) {
-          layoverMultiplier = 5.0; // 特大ボーナスに変更
-        // "短すぎる時間 (<3h)"
-        } else if (layoverHours < 3) {
-          layoverMultiplier = -1.0;
-        }
-
-        const currentStopScore = stopBaseScore * layoverMultiplier;
-        if (currentStopScore > maxBonusScore) {
-          maxBonusScore = currentStopScore;
-        }
-      }
-      rawInterest = maxBonusScore;
-    }
-
-    return rawInterest + jalBonus;
+    if (!schedule.scheduledStops.length) return 0;
+    return Math.max(...schedule.scheduledStops.map((stop) => (
+      (cityAttractiveness[stop.airport] ?? 50) * 0.55
+      + usableTimeScore(stop.usableMinutes) * 0.25
+      + airportAccessScore(stop.airport) * 0.1
+      + timeWindowScore(stop) * 0.1
+    )));
   });
 
   const interestMin = Math.min(...rawInterests);
@@ -642,23 +831,50 @@ export function scoreScheduledRoutes(
     if (schedule.scheduledStops.some(crossesLocalMidnight)) conveniencePenalty += 15;
     if (schedule.scheduledStops.some((stop) => stop.durationMinutes < (stop.kind === "connection" ? 90 : 180))) conveniencePenalty += 20;
     const convenience = Math.max(0, 100 - conveniencePenalty);
-    const directness = Math.max(0, Math.min(100, 0.4 * stops + 0.4 * duration + 0.2 * convenience));
+    const baseDirectness = Math.max(0, Math.min(100, 0.4 * stops + 0.4 * duration + 0.2 * convenience));
+    const scheduleMatch = scoreSchedulePreference(schedule, preferences);
+    const comfortMatch = scoreComfortPreference(route, preferences);
+    let directness = baseDirectness;
+    if (scheduleMatch !== null) directness = directness * 0.75 + scheduleMatch * 0.25;
+    if (comfortMatch !== null) directness = directness * 0.85 + comfortMatch * 0.15;
 
-    // Normalize interest to strict 0-100 scale
-    const interest = interestMax === interestMin ? 100 : 100 * ((rawInterests[i] - interestMin) / (interestMax - interestMin));
+    const cityInterest = interestMax === interestMin
+      ? 100
+      : 100 * ((rawInterests[i] - interestMin) / (interestMax - interestMin));
+    const airlineMatch = scoreAirlinePreference(schedule, preferences);
+    const airlineStrength = preferences
+      ? Math.max(
+        0,
+        ...preferences.preferredAirlines.map((item) => item.strength),
+        ...preferences.avoidedAirlines.map((item) => item.strength),
+        ...preferences.preferredAlliances.map((item) => item.strength),
+      )
+      : 0;
+    const airlineWeight = airlineMatch === null ? 0 : Math.min(0.35, airlineStrength / 5 * 0.35);
+    const interest = cityInterest * (1 - airlineWeight) + (airlineMatch ?? 0) * airlineWeight;
 
-    // Exponentially boost the interest weight when the user sets it high, so it dominates the final score
-    const boostedInterestWeight = weights.interest > 20 
-      ? weights.interest * (weights.interest / 15) 
-      : weights.interest;
-
-    const totalWeights = weights.price + boostedInterestWeight + weights.directness;
-    const total = (price * weights.price + interest * boostedInterestWeight + directness * weights.directness) / totalWeights;
+    const totalWeights = weights.price + weights.interest + weights.directness || 1;
+    const total = (
+      price * weights.price
+      + interest * weights.interest
+      + directness * weights.directness
+    ) / totalWeights;
 
     return {
       ...route,
       ...schedule,
-      scores: { price, interest, directness, total, stops, duration, convenience },
+      scores: {
+        price,
+        interest,
+        directness,
+        total,
+        stops,
+        duration,
+        convenience,
+        scheduleMatch,
+        comfortMatch,
+        airlineMatch,
+      },
     };
   });
 }

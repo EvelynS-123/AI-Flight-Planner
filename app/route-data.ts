@@ -1,4 +1,5 @@
 import { scoreScheduledRoutes, type StopoverSelections } from "./flight-schedules.ts";
+import type { TravelPreferenceState } from "./travel-preferences.ts";
 
 export type AirportCode = string;
 
@@ -328,6 +329,7 @@ export function scoreRoutes(
   weights: RouteWeights = { price: 30, interest: 35, directness: 35 },
   selections: StopoverSelections = {},
   cityAttractiveness?: Record<string, number>,
+  preferences?: TravelPreferenceState,
 ) {
-  return scoreScheduledRoutes(routes, weights, selections, cityAttractiveness);
+  return scoreScheduledRoutes(routes, weights, selections, cityAttractiveness, preferences);
 }
