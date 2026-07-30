@@ -17,24 +17,30 @@ type ExplorationHubOption = {
   reason: string;
 };
 
-function hubCharacter(code: string, city: string, locale: Locale) {
+function hubCharacter(city: string, locale: Locale) {
   if (locale === "zh") return `${city}的街区、美食与当地生活`;
   if (locale === "ja") return `${city}の街並み、食文化、ローカルな暮らし`;
   if (locale === "ko") return `${city}의 거리, 음식과 현지 생활`;
   return `${city}'s neighborhoods, food, and local culture`;
 }
 
-function applyHubCharacteristics(
+function applyHubDetails(
   options: ExplorationHubOption[],
-  reasons: unknown,
+  details: unknown,
 ): ExplorationHubOption[] {
-  if (!reasons || typeof reasons !== "object") return options;
-  const reasonByCode = reasons as Record<string, unknown>;
+  if (!details || typeof details !== "object") return options;
+  const detailByCode = details as Record<string, unknown>;
   return options.map((option) => {
-    const reason = reasonByCode[option.code];
-    return typeof reason === "string" && reason.trim()
-      ? { ...option, reason: reason.trim() }
-      : option;
+    const detail = detailByCode[option.code];
+    if (!detail || typeof detail !== "object") return option;
+    const value = detail as Record<string, unknown>;
+    const city = typeof value.city === "string" && value.city.trim()
+      ? value.city.trim()
+      : option.city;
+    const reason = typeof value.reason === "string" && value.reason.trim()
+      ? value.reason.trim()
+      : option.reason;
+    return { ...option, city, reason };
   });
 }
 
@@ -142,7 +148,7 @@ function verifiedHubOptions(
       options.push({
         code,
         city,
-        reason: creative?.reason || hubCharacter(code, city, locale),
+        reason: creative?.reason || hubCharacter(city, locale),
       });
     }
   }
@@ -224,7 +230,7 @@ export function FlightChat({
       });
       if (!response.ok) return options;
       const data = await response.json();
-      return applyHubCharacteristics(options, data.reasons);
+      return applyHubDetails(options, data.hubs);
     } catch {
       return options;
     }

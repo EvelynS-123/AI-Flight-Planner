@@ -1,4 +1,4 @@
-import { createTravelAIProvider } from "../../../ai-travel/providers";
+import { createTravelAIProvider } from "../../../ai-travel/providers.ts";
 
 export const runtime = "nodejs";
 
@@ -46,31 +46,35 @@ export async function POST(request: Request) {
     const result = await provider.generateJson({
       purpose: "query-discovery",
       systemPrompt: `Describe the real travel character of a supplied list of verified flight-connection cities.
-Return only a JSON object shaped as {"reasons":{"IATA":"concise description"}}.
+Return only a JSON object shaped as {"hubs":[{"code":"IATA","city":"localized city name","reason":"concise description"}]}.
 Keep every supplied IATA code exactly once and do not add or remove cities.
+The city field must contain only the city or metropolitan-area name in ${language}, never an airport name.
 Write each description in ${language}, using roughly 8–18 words.
 Mention distinctive food, culture, urban life, nature, history, or scenery. Do not mention route verification, flights, airports, or generic praise.
 When preferences are supplied, emphasize genuinely matching city characteristics without inventing facts.`,
       userPrompt: JSON.stringify({ hubs, preferenceContext: preference }),
-    }) as { reasons?: unknown };
+    }) as { hubs?: unknown };
 
     const allowedCodes = new Set(hubs.map((hub) => hub.code));
-    const reasons = Object.fromEntries(
-      Object.entries(
-        result?.reasons && typeof result.reasons === "object"
-          ? result.reasons as Record<string, unknown>
-          : {},
-      ).flatMap(([code, reason]) => (
-        allowedCodes.has(code)
-        && typeof reason === "string"
-        && reason.trim()
-          ? [[code, reason.trim().slice(0, 120)]]
-          : []
-      )),
+    const details = Object.fromEntries(
+      (Array.isArray(result?.hubs) ? result.hubs : []).flatMap((entry) => {
+        if (!entry || typeof entry !== "object") return [];
+        const value = entry as Record<string, unknown>;
+        const code = typeof value.code === "string"
+          ? value.code.trim().toUpperCase()
+          : "";
+        const city = typeof value.city === "string" ? value.city.trim() : "";
+        const reason = typeof value.reason === "string" ? value.reason.trim() : "";
+        if (!allowedCodes.has(code) || !city || !reason) return [];
+        return [[code, {
+          city: city.slice(0, 80),
+          reason: reason.slice(0, 120),
+        }]];
+      }),
     );
-    return Response.json({ reasons });
+    return Response.json({ hubs: details });
   } catch (error) {
     console.error("Hub characteristic API error:", error);
-    return Response.json({ reasons: {} });
+    return Response.json({ hubs: {} });
   }
 }

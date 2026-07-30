@@ -67,6 +67,8 @@ test("stopover choices are extracted from one verified regular search", () => {
   assert.doesNotMatch(flightChatSource, /实时联程航线已验证|Verified in live connecting itineraries/);
   assert.match(flightChatSource, /\/api\/chat\/hub-characteristics/);
   assert.match(hubCharacteristicsSource, /Keep every supplied IATA code exactly once/);
+  assert.match(hubCharacteristicsSource, /never an airport name/);
+  assert.match(flightChatSource, /return applyHubDetails\(options, data\.hubs\)/);
   assert.doesNotMatch(hubCharacteristicsSource, /AUH|IST|HAK|DEL|BOM/);
   assert.doesNotMatch(flightChatSource, /\.slice\(0, 12\)/);
 });
