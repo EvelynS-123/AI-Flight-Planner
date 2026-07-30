@@ -60,6 +60,7 @@ test("initial search uses one regular request plus two per selected hub", async 
     assert.equal(data.meta.providerRequests, 7);
     assert.equal(data.meta.requestLimit, 7);
     assert.equal(new URL(calls[0]).searchParams.get("show_hidden"), "true");
+    assert.equal(new URL(calls[0]).searchParams.get("deep_search"), "true");
     assert.ok(calls.slice(1).every((url) =>
       new URL(url).searchParams.get("show_hidden") === null
     ));
@@ -92,6 +93,8 @@ test("initial search uses one regular request plus two per selected hub", async 
 
     assert.equal(calls.length - directCallsBefore, 1);
     assert.equal(directVariantData.meta.providerRequests, 1);
+    assert.equal(new URL(calls.at(-1)).searchParams.get("show_hidden"), "true");
+    assert.equal(new URL(calls.at(-1)).searchParams.get("deep_search"), "true");
     assert.ok(directVariantData.results.every((flight) =>
       flight.departureTime.startsWith("2026-09-20")
     ));
@@ -119,6 +122,86 @@ test("initial search uses one regular request plus two per selected hub", async 
     assert.equal(calls.length - multiCallsBefore, 2);
     assert.equal(multiVariantData.meta.providerRequests, 2);
     assert.ok(multiVariantData.results.every((flight) => flight.isSelfTransfer));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.SERPAPI_API_KEY;
+    else process.env.SERPAPI_API_KEY = originalApiKey;
+  }
+});
+
+test("normal search preserves nonstop flights beyond the cheapest result cap", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.SERPAPI_API_KEY;
+  process.env.SERPAPI_API_KEY = "nonstop-cap-test-key";
+  globalThis.fetch = async (urlString) => {
+    const url = new URL(String(urlString));
+    const date = url.searchParams.get("outbound_date");
+    const connecting = Array.from({ length: 101 }, (_, index) => ({
+      price: 100 + index,
+      total_duration: 900 + index,
+      flights: [
+        {
+          departure_airport: { id: "LHR", time: `${date} 08:00` },
+          arrival_airport: { id: "DOH", time: `${date} 18:00` },
+          airline: `Connection Air ${index}`,
+          airline_logo: "https://example.com/connection.png",
+          flight_number: `CA ${index + 1}`,
+          duration: 600,
+          travel_class: "Economy",
+        },
+        {
+          departure_airport: { id: "DOH", time: `${date} 20:00` },
+          arrival_airport: { id: "HKG", time: `${date} 23:00` },
+          airline: `Connection Air ${index}`,
+          airline_logo: "https://example.com/connection.png",
+          flight_number: `CA ${index + 201}`,
+          duration: 180,
+          travel_class: "Economy",
+        },
+      ],
+    }));
+    return Response.json({
+      search_metadata: {
+        google_flights_url: "https://www.google.com/travel/flights/example",
+      },
+      best_flights: connecting,
+      other_flights: [{
+        price: 999,
+        total_duration: 785,
+        flights: [{
+          departure_airport: { id: "LHR", time: `${date} 19:20` },
+          arrival_airport: { id: "HKG", time: `${date} 15:25` },
+          airline: "British Airways",
+          airline_logo: "https://example.com/ba.png",
+          flight_number: "BA 31",
+          duration: 785,
+          travel_class: "Economy",
+        }],
+      }],
+    });
+  };
+
+  try {
+    const response = await POST(new Request("http://local/api/flights/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        legs: [{ origins: ["LHR"], destinations: ["HKG"] }],
+        dateRangeStart: "2026-10-11",
+        dateRangeEnd: "2026-10-11",
+        tripType: "one_way",
+        cabinClass: "economy",
+        adults: 1,
+        explorationHubs: [],
+      }),
+    }));
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(data.results.length, 100);
+    assert.ok(data.results.some((flight) =>
+      flight.stops === 0 && flight.flightNumbers.includes("BA 31")
+    ));
   } finally {
     globalThis.fetch = originalFetch;
     if (originalApiKey === undefined) delete process.env.SERPAPI_API_KEY;
