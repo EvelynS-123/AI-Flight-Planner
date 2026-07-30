@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AIRPORT_CITIES, COPY, LOCALE_OPTIONS, airportCity } from "../app/i18n.ts";
+import {
+  AIRPORT_CITIES,
+  COPY,
+  LOCALE_OPTIONS,
+  airportCity,
+  airportMetroGroup,
+} from "../app/i18n.ts";
 import {
   PACE_POLICIES,
   alignMealDescriptionToLocalTime,
@@ -589,8 +595,15 @@ test("all four locales cover the interface and airports", () => {
 test("less common airports show a city or live provider name instead of only a code", () => {
   assert.equal(airportCity("HAK", "zh"), "海口");
   assert.equal(airportCity("AUH", "zh"), "阿布扎比");
-  assert.equal(airportCity("DPS", "zh", "Denpasar-Bali Island"), "丹帕沙");
+  assert.equal(airportCity("DPS", "zh", "Denpasar-Bali Island"), "登巴萨");
+  assert.equal(airportCity("HND", "zh"), "东京");
+  assert.equal(airportCity("NRT", "zh"), "东京");
   assert.equal(airportCity("DPS", "ja"), "デンパサール");
+  assert.deepEqual(airportMetroGroup("NRT"), {
+    cityCode: "TYO",
+    name: "Tokyo",
+    airports: ["HND", "NRT"],
+  });
   assert.ok(Object.keys(AIRPORT_CITIES.zh).length > 5_000);
   assert.ok(Object.keys(AIRPORT_CITIES.ko).length > 5_000);
   assert.equal(

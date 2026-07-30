@@ -15,6 +15,12 @@ test("localized airport table covers every served-city entry", async () => {
 
   assert.equal(Object.keys(localizations).length, 7066);
   assert.deepEqual(Object.keys(localizations), Object.keys(cities));
+  assert.equal(localizations.YVR.zh, "温哥华");
+  assert.equal(localizations.YZF.zh, "黄刀镇");
+  assert.equal(localizations.DPS.zh, "登巴萨");
+  assert.equal(localizations.HND.zh, "东京");
+  assert.equal(localizations.NRT.zh, "东京");
+  assert.equal(localizations.TPE.zh, "台北");
   for (const [code, names] of Object.entries(localizations)) {
     for (const locale of ["en", "zh", "ko", "ja"]) {
       assert.equal(
