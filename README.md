@@ -56,7 +56,30 @@ paths intentionally remain independent.
 ## Test
 
 ```bash
+npm run typecheck
 npm test
 ```
+
+Run the complete local and CI verification before opening a pull request:
+
+```bash
+npm run check
+```
+
+## Project structure
+
+- `app/` contains the product UI, route ranking, flight search, and AI stopover planning.
+- `app/api/` contains server-only API routes.
+- `db/` and `drizzle/` contain the flight-search cache schema and migration.
+- `worker/` contains the Cloudflare Worker entry point.
+- `tests/` contains the build-backed Node.js test suite.
+- `scripts/` contains airport localization maintenance tools.
+
+## Team development
+
+Keep each pull request focused on one behavior or maintenance goal. Do not mix
+new features with refactoring, and never commit local API keys. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the shared workflow and verification
+requirements.
 
 Fare data is provided only as a demonstration snapshot. It does not represent live availability, and separately ticketed segments may require independent booking and schedule verification.
