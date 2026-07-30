@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AIRPORT_CITIES, COPY, LOCALE_OPTIONS } from "../app/i18n.ts";
+import { AIRPORT_CITIES, COPY, LOCALE_OPTIONS, airportCity } from "../app/i18n.ts";
 import {
   PACE_POLICIES,
   alignMealDescriptionToLocalTime,
@@ -584,6 +584,15 @@ test("all four locales cover the interface and airports", () => {
     assert.ok(COPY[code].search);
     for (const airport of airportCodes) assert.ok(AIRPORT_CITIES[code][airport]);
   }
+});
+
+test("less common airports show a city or live provider name instead of only a code", () => {
+  assert.equal(airportCity("HAK", "zh"), "海口");
+  assert.equal(airportCity("AUH", "zh"), "阿布扎比");
+  assert.equal(
+    airportCity("XYZ", "en", "Example Regional Airport"),
+    "Example Regional Airport",
+  );
 });
 
 test("travel quiz defaults and favorites keep their established behavior", () => {

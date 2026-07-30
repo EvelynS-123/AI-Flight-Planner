@@ -1,4 +1,9 @@
 // Simple FNV-1a hash for cache keys and IDs (Workers-compatible, no Node.js crypto needed)
+import {
+  readPersistentFlightSearchCache,
+  writePersistentFlightSearchCache,
+} from "../../../../db/flight-search-cache.ts";
+
 function fnv1a(str: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
@@ -483,6 +488,10 @@ function combineTwoLegResults(firstLeg: any[], secondLeg: any[]) {
         cabinClass: f1.cabinClass,
         priceLevel: f1.priceLevel,
         flights: [...(f1.flights || []), ...(f2.flights || [])],
+        airportNames: {
+          ...(f1.airportNames || {}),
+          ...(f2.airportNames || {}),
+        },
         isSelfTransfer: true,
         riskPattern,
         leg1: f1,
@@ -620,10 +629,17 @@ async function executeQuery(url: string, onProviderRequest?: () => void) {
     Number(process.env.FLIGHT_SEARCH_CACHE_TTL_MS || 1800000),
   );
 
-  const cacheKey = fnv1a(url);
+  const canonicalUrl = new URL(url);
+  canonicalUrl.searchParams.delete("api_key");
+  const cacheKey = fnv1a(canonicalUrl.toString());
   const cached = FLIGHT_SEARCH_CACHE.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.results;
+  }
+  const persistent = await readPersistentFlightSearchCache(cacheKey);
+  if (persistent) {
+    FLIGHT_SEARCH_CACHE.set(cacheKey, persistent);
+    return persistent.results;
   }
 
   try {
@@ -640,6 +656,18 @@ async function executeQuery(url: string, onProviderRequest?: () => void) {
       const flightNum = f.flights.map((fl: any) => fl.flight_number);
       const stops = f.flights.length - 1;
       const stopAirports = stops > 0 ? f.flights.slice(0, -1).map((fl: any) => fl.arrival_airport.id) : [];
+      const airportNames = Object.fromEntries(
+        f.flights.flatMap((flight: any) => [
+          [
+            String(flight.departure_airport?.id || "").toUpperCase(),
+            String(flight.departure_airport?.name || "").trim(),
+          ],
+          [
+            String(flight.arrival_airport?.id || "").toUpperCase(),
+            String(flight.arrival_airport?.name || "").trim(),
+          ],
+        ]).filter(([code, name]: [string, string]) => /^[A-Z0-9]{3}$/.test(code) && name),
+      );
 
       const result = {
         id: fnv1a([
@@ -665,16 +693,19 @@ async function executeQuery(url: string, onProviderRequest?: () => void) {
         bookingUrl: data.search_metadata?.google_flights_url || "",
         carbonEmissions: f.carbon_emissions?.this_flight,
         priceLevel: data.price_insights?.typical_price_level,
-        flights: f.flights
+        flights: f.flights,
+        airportNames,
       };
       return result;
     });
 
     if (cacheTtlMilliseconds > 0) {
+      const expiresAt = Date.now() + cacheTtlMilliseconds;
       FLIGHT_SEARCH_CACHE.set(cacheKey, {
-        expiresAt: Date.now() + cacheTtlMilliseconds,
+        expiresAt,
         results: parsed,
       });
+      await writePersistentFlightSearchCache(cacheKey, parsed, expiresAt);
     }
 
     return parsed;

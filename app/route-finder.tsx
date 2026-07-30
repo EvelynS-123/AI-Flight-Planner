@@ -44,7 +44,8 @@ function mapLiveFlightGroupsToRouteOptions(
           stops: f.stops
         }
       ],
-      liveFlights: f.flights
+      liveFlights: f.flights,
+      airportNames: f.airportNames,
     };
   });
 }
@@ -172,11 +173,19 @@ function SketchPlane({ size = 28 }: { size?: number }) {
   );
 }
 
-function AirportLabel({ code, locale }: { code: string; locale: Locale }) {
+function AirportLabel({
+  code,
+  locale,
+  providerName,
+}: {
+  code: string;
+  locale: Locale;
+  providerName?: string;
+}) {
   return (
     <span className="airport-label">
       <strong>{code}</strong>
-      <span>{airportCity(code, locale)}</span>
+      <span>{airportCity(code, locale, providerName)}</span>
     </span>
   );
 }
@@ -277,6 +286,15 @@ export default function RouteFinder() {
     () => new Map((liveFlightGroups ?? []).map((group) => [group.id, group])),
     [liveFlightGroups],
   );
+  const liveAirportNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    for (const group of liveFlightGroups ?? []) {
+      for (const flight of group.variants) {
+        Object.assign(names, flight.airportNames);
+      }
+    }
+    return names;
+  }, [liveFlightGroups]);
 
   const results = useMemo(() => {
     const matched = liveFlights || ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
@@ -840,7 +858,11 @@ export default function RouteFinder() {
             <div className="results-heading">
               <div>
                 <p className="eyebrow">{copy.routeIdeas}</p>
-                <h2><AirportLabel code={origin} locale={locale} /> <Arrow /> <AirportLabel code={destination} locale={locale} /></h2>
+                <h2>
+                  <AirportLabel code={origin} locale={locale} providerName={liveAirportNames[origin]} />
+                  {" "}<Arrow />{" "}
+                  <AirportLabel code={destination} locale={locale} providerName={liveAirportNames[destination]} />
+                </h2>
                 <p>{results.length ? resultSummary : copy.noRoute}</p>
               </div>
             </div>
@@ -949,7 +971,7 @@ export default function RouteFinder() {
                               <Arrow />
                               <span
                                 className={`hub-code ${route.ticketType === "connection" ? "connection-hub" : "multi-city-hub"}`}
-                                title={`${route.ticketType === "connection" ? copy.connectionHub : copy.multiCityHub} · ${airportCity(hub, locale)}`}
+                                title={`${route.ticketType === "connection" ? copy.connectionHub : copy.multiCityHub} · ${airportCity(hub, locale, route.airportNames?.[hub])}`}
                               >
                                 {hub}
                               </span>
@@ -960,7 +982,7 @@ export default function RouteFinder() {
                         <div className="route-meta">
                           <span className={`ticket-pill ${route.ticketType}`}>{ticket.label}</span>
                           <span>{ticket.detail}</span>
-                          {route.hubs.length > 0 && <span>{copy.via} {route.hubs.map((hub) => airportCity(hub, locale)).join(locale === "en" ? ", " : "、")}</span>}
+                          {route.hubs.length > 0 && <span>{copy.via} {route.hubs.map((hub) => airportCity(hub, locale, route.airportNames?.[hub])).join(locale === "en" ? ", " : "、")}</span>}
                           <span>{copy.totalDuration} {localizeDuration(route.totalDurationMinutes, locale)}</span>
                         </div>
                       </div>
@@ -1066,14 +1088,14 @@ export default function RouteFinder() {
                                 <div className={`stopover-plan ${stop.kind}`} key={`${stop.airport}-${stopIndex}`}>
                                   <div className="stopover-copy">
                                     <span>{stop.kind === "multi-city" ? copy.stopoverPlan : copy.connectionTime}</span>
-                                    <strong>{airportCity(stop.airport, locale)} · {localizeDuration(stop.durationMinutes, locale)}</strong>
+                                    <strong>{airportCity(stop.airport, locale, route.airportNames?.[stop.airport])} · {localizeDuration(stop.durationMinutes, locale)}</strong>
                                     <small>{copy.usableTime} {localizeDuration(stop.usableMinutes, locale)}</small>
                                   </div>
                                   {stop.kind === "multi-city" ? (
                                     <label className="stay-selector">
                                       <span>{copy.playDays}</span>
                                       <select
-                                        aria-label={`${copy.playDays} · ${airportCity(stop.airport, locale)}`}
+                                        aria-label={`${copy.playDays} · ${airportCity(stop.airport, locale, route.airportNames?.[stop.airport])}`}
                                         value={route.selectedStopoverDays[multiIndex] ?? stop.playDays}
                                         onChange={(event) => updateStopoverDays(route.id, multiIndex, Number(event.target.value))}
                                       >

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { COPY, type Locale } from "./i18n";
+import { COPY, airportCity, type Locale } from "./i18n";
 import type { FlightResult } from "./flight-results";
 import { groupFlightResults } from "./flights/group-results";
 
@@ -97,7 +97,48 @@ function normalizeHubOptions(params: SearchParams): ExplorationHubOption[] {
           ? String(reasons[code]).trim()
           : "",
     }];
-  }).slice(0, 6);
+  }).slice(0, 12);
+}
+
+function verifiedHubOptions(
+  params: SearchParams,
+  flights: FlightResult[],
+  locale: Locale,
+): ExplorationHubOption[] {
+  const suggested = normalizeHubOptions(params);
+  const suggestionByCode = new Map(suggested.map((option) => [option.code, option]));
+  const seen = new Set<string>();
+  const verifiedCopy = locale === "zh"
+    ? "实时联程航线已验证"
+    : locale === "ja"
+      ? "リアルタイムの乗り継ぎ便を確認済み"
+      : locale === "ko"
+        ? "실시간 연결편 확인됨"
+        : "Verified in live connecting itineraries";
+  const options: ExplorationHubOption[] = [];
+
+  for (const flight of flights) {
+    if (flight.isSelfTransfer) continue;
+    for (const codeValue of flight.stopAirports || []) {
+      const code = String(codeValue).trim().toUpperCase();
+      if (!/^[A-Z]{3}$/.test(code) || seen.has(code)) continue;
+      seen.add(code);
+      const creative = suggestionByCode.get(code);
+      options.push({
+        code,
+        city: creative?.city || airportCity(code, locale, flight.airportNames?.[code]),
+        reason: creative?.reason || verifiedCopy,
+      });
+    }
+  }
+
+  return options
+    .sort((left, right) => {
+      const leftSuggested = suggestionByCode.has(left.code) ? 1 : 0;
+      const rightSuggested = suggestionByCode.has(right.code) ? 1 : 0;
+      return rightSuggested - leftSuggested;
+    })
+    .slice(0, 12);
 }
 
 export function FlightChat({
@@ -196,9 +237,19 @@ export function FlightChat({
         setSearchParams(data.params);
         const hasRequiredMultiLegRoute =
           Array.isArray(data.params.legs) && data.params.legs.length > 1;
-        setHubOptions(
-          hasRequiredMultiLegRoute ? [] : normalizeHubOptions(data.params),
-        );
+        if (hasRequiredMultiLegRoute) {
+          setHubOptions([]);
+        } else {
+          const discovery = await searchFlights({
+            ...data.params,
+            explorationHubs: [],
+          });
+          setHubOptions(
+            discovery.flights
+              ? verifiedHubOptions(data.params, discovery.flights, locale)
+              : [],
+          );
+        }
         setSelectedHubs([]);
         setPhase("ready");
       }
