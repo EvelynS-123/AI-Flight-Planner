@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         ? "Korean"
         : "English";
   const preference = preferenceContext
-    ? JSON.stringify(preferenceContext).slice(0, 2000)
+    ? JSON.stringify(preferenceContext).slice(0, 6000)
     : "none";
 
   try {

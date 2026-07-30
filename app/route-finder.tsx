@@ -14,6 +14,7 @@ import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./f
 import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
 import AITravelWorkspace from "./ai-travel-workspace";
 import { FlightChat } from "./flight-chat";
+import PreferenceChat from "./preference-chat";
 import type { FlightResult } from "./flight-results";
 import {
   groupFlightResults,
@@ -71,17 +72,11 @@ function liveFlightPickerCopy(locale: Locale) {
 }
 
 import {
-  DEFAULT_PREFERENCE_LEVELS,
-  FAVORITE_CITY_LIMIT,
-  PREFERENCE_CATEGORIES,
+  LEGACY_PREFERENCE_STORAGE_KEY,
   PREFERENCE_STORAGE_KEY,
-  QUIZ_CITY_CODES,
   buildPersonalizedAttractiveness,
   defaultTravelPreferences,
-  personalizedTravelPreferences,
   sanitizeTravelPreferences,
-  type PreferenceCategory,
-  type PreferenceLevels,
   type TravelPreferenceState,
 } from "./travel-preferences";
 
@@ -201,10 +196,7 @@ export default function RouteFinder() {
   const [weights, setWeights] = useState<RouteWeights>({ price: 30, interest: 35, directness: 35 });
   const [stopoverSelections, setStopoverSelections] = useState<StopoverSelections>({});
   const [travelPreferences, setTravelPreferences] = useState<TravelPreferenceState | null>(null);
-  const [preferenceDraft, setPreferenceDraft] = useState<PreferenceLevels>({ ...DEFAULT_PREFERENCE_LEVELS });
-  const [favoriteDraft, setFavoriteDraft] = useState<string[]>([]);
   const [quizOpen, setQuizOpen] = useState(false);
-  const [quizStep, setQuizStep] = useState<1 | 2>(1);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [closingRouteId, setClosingRouteId] = useState<string | null>(null);
   const [aiRouteId, setAiRouteId] = useState<string | null>(null);
@@ -239,7 +231,6 @@ export default function RouteFinder() {
   const dragBarRect = useRef<DOMRect | null>(null);
   const pendingBoundaryUpdate = useRef<{ boundary: "price-interest" | "interest-directness"; clientX: number } | null>(null);
   const boundaryFrame = useRef<number | null>(null);
-  const quizPanelRef = useRef<HTMLElement>(null);
   const copy = COPY[locale];
   const localeOption = LOCALE_OPTIONS.find((item) => item.code === locale)!;
 
@@ -270,13 +261,19 @@ export default function RouteFinder() {
 
   const results = useMemo(() => {
     const matched = liveFlights || ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
-    const scored = scoreRoutes(matched, weights, stopoverSelections, personalizedAttractiveness);
+    const scored = scoreRoutes(
+      matched,
+      weights,
+      stopoverSelections,
+      personalizedAttractiveness,
+      travelPreferences ?? undefined,
+    );
     if (isDraggingWeights && dragOrder.current) {
       const positions = new Map(dragOrder.current.map((id, index) => [id, index]));
       return scored.sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
     }
     return scored.sort((a, b) => b.scores.total - a.scores.total || (a.total ?? Number.MAX_SAFE_INTEGER) - (b.total ?? Number.MAX_SAFE_INTEGER));
-  }, [liveFlights, origin, destination, month, weights, stopoverSelections, personalizedAttractiveness, isDraggingWeights]);
+  }, [liveFlights, origin, destination, month, weights, stopoverSelections, personalizedAttractiveness, travelPreferences, isDraggingWeights]);
 
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
@@ -416,31 +413,19 @@ export default function RouteFinder() {
   useEffect(() => {
     let stored: TravelPreferenceState | null = null;
     try {
-      stored = sanitizeTravelPreferences(JSON.parse(localStorage.getItem(PREFERENCE_STORAGE_KEY) ?? "null"));
+      const raw = localStorage.getItem(PREFERENCE_STORAGE_KEY)
+        ?? localStorage.getItem(LEGACY_PREFERENCE_STORAGE_KEY);
+      stored = sanitizeTravelPreferences(JSON.parse(raw ?? "null"));
     } catch {
       stored = null;
     }
     if (stored) {
+      localStorage.setItem(PREFERENCE_STORAGE_KEY, JSON.stringify(stored));
       setTravelPreferences(stored);
-      setPreferenceDraft({ ...stored.categories });
-      setFavoriteDraft([...stored.favoriteCities]);
     } else {
       setQuizOpen(true);
     }
   }, []);
-
-  useEffect(() => {
-    if (!quizOpen) return;
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const frame = requestAnimationFrame(() => quizPanelRef.current?.querySelector<HTMLElement>("button:not([disabled]), select")?.focus());
-    return () => {
-      cancelAnimationFrame(frame);
-      document.body.style.overflow = previousOverflow;
-      previousFocus?.focus();
-    };
-  }, [quizOpen]);
 
   useEffect(() => {
     const continueDrag = (event: globalThis.PointerEvent) => {
@@ -728,66 +713,17 @@ export default function RouteFinder() {
   function storePreferences(next: TravelPreferenceState) {
     localStorage.setItem(PREFERENCE_STORAGE_KEY, JSON.stringify(next));
     setTravelPreferences(next);
-    setPreferenceDraft({ ...next.categories });
-    setFavoriteDraft([...next.favoriteCities]);
     setQuizOpen(false);
   }
 
   function openPreferences() {
-    const current = travelPreferences ?? defaultTravelPreferences();
-    setPreferenceDraft({ ...current.categories });
-    setFavoriteDraft([...current.favoriteCities]);
-    setQuizStep(1);
     setQuizOpen(true);
-  }
-
-  function skipPreferences() {
-    storePreferences(defaultTravelPreferences());
-  }
-
-  function savePreferences() {
-    storePreferences(personalizedTravelPreferences(preferenceDraft, favoriteDraft));
   }
 
   function closePreferences() {
     if (travelPreferences) setQuizOpen(false);
-    else skipPreferences();
+    else storePreferences(defaultTravelPreferences());
   }
-
-  function toggleFavorite(city: string) {
-    setFavoriteDraft((current) => {
-      if (current.includes(city)) return current.filter((item) => item !== city);
-      if (current.length >= FAVORITE_CITY_LIMIT) return current;
-      return [...current, city];
-    });
-  }
-
-  function handleQuizKeyDown(event: KeyboardEvent<HTMLElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closePreferences();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const focusable = [...(quizPanelRef.current?.querySelectorAll<HTMLElement>("button:not([disabled]), select:not([disabled])") ?? [])];
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable.at(-1)!;
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
-
-  const quizCategoryLabels: Record<PreferenceCategory, string> = {
-    food: copy.quizFood,
-    culture: copy.quizCulture,
-    nature: copy.quizNature,
-    urban: copy.quizUrban,
-  };
 
   return (
     <>
@@ -1231,109 +1167,13 @@ export default function RouteFinder() {
       />
     )}
     {quizOpen && (
-      <div className="preference-overlay">
-        <section
-          className="preference-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="preference-title"
-          ref={quizPanelRef}
-          onKeyDown={handleQuizKeyDown}
-        >
-          <header className="preference-header">
-            <div>
-              <p>{copy.quizStep(quizStep)}</p>
-              <h2 id="preference-title">{copy.quizTitle}</h2>
-              <span>{copy.quizBody}</span>
-            </div>
-            <div className="preference-header-actions">
-              <label className="language-picker quiz-language-picker">
-                <span className="sr-only">{copy.language}</span>
-                <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)} aria-label={copy.language}>
-                  {LOCALE_OPTIONS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
-                </select>
-              </label>
-              <button className="quiz-close" type="button" onClick={closePreferences} aria-label={travelPreferences ? copy.quizClose : copy.quizSkip}>×</button>
-            </div>
-          </header>
-
-          <div className="quiz-progress" aria-hidden="true">
-            <span className="active" />
-            <span className={quizStep === 2 ? "active" : ""} />
-          </div>
-
-          <div className="preference-pages" data-step={quizStep}>
-            {quizStep === 1 ? (
-              <div className="preference-page category-page">
-                <div className="quiz-section-title">
-                  <h3>{copy.quizCategoryTitle}</h3>
-                  <p>{copy.quizCategoryHelp}</p>
-                </div>
-                <div className="preference-categories">
-                  {PREFERENCE_CATEGORIES.map((category) => (
-                    <fieldset className="preference-category" key={category}>
-                      <legend>{quizCategoryLabels[category]}</legend>
-                      <div className="preference-scale">
-                        {[1, 2, 3, 4, 5].map((level) => (
-                          <button
-                            type="button"
-                            key={level}
-                            className={preferenceDraft[category] === level ? "selected" : ""}
-                            aria-pressed={preferenceDraft[category] === level}
-                            aria-label={`${quizCategoryLabels[category]} ${level}/5`}
-                            onClick={() => setPreferenceDraft((current) => ({ ...current, [category]: level }))}
-                          >
-                            <span>{level}</span>
-                          </button>
-                        ))}
-                      </div>
-                      <div className="preference-scale-labels"><span>{copy.quizLow}</span><span>{copy.quizHigh}</span></div>
-                    </fieldset>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="preference-page favorites-page">
-                <div className="quiz-section-title">
-                  <h3>{copy.quizFavoritesTitle}</h3>
-                  <p>{copy.quizFavoritesHelp}</p>
-                </div>
-                <div className="favorite-count">{copy.quizFavoritesCount(favoriteDraft.length)}</div>
-                <div className="favorite-city-grid">
-                  {QUIZ_CITY_CODES.map((city) => {
-                    const selected = favoriteDraft.includes(city);
-                    const unavailable = !selected && favoriteDraft.length >= FAVORITE_CITY_LIMIT;
-                    return (
-                      <button
-                        type="button"
-                        key={city}
-                        className={selected ? "selected" : ""}
-                        aria-pressed={selected}
-                        disabled={unavailable}
-                        onClick={() => toggleFavorite(city)}
-                      >
-                        <strong>{city}</strong>
-                        <span>{airportCity(city, locale)}</span>
-                        <i aria-hidden="true">{selected ? "✓" : "+"}</i>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <footer className="preference-footer">
-            <button className="quiz-skip" type="button" onClick={skipPreferences}>{copy.quizSkip}</button>
-            <div>
-              {quizStep === 2 && <button className="quiz-back" type="button" onClick={() => setQuizStep(1)}>{copy.quizBack}</button>}
-              {quizStep === 1
-                ? <button className="quiz-primary" type="button" onClick={() => setQuizStep(2)}>{copy.quizNext}<span aria-hidden="true">→</span></button>
-                : <button className="quiz-primary" type="button" onClick={savePreferences}>{copy.quizSave}<span aria-hidden="true">✓</span></button>}
-            </div>
-          </footer>
-        </section>
-      </div>
+      <PreferenceChat
+        locale={locale}
+        memory={travelPreferences}
+        onLocaleChange={setLocale}
+        onClose={closePreferences}
+        onSave={storePreferences}
+      />
     )}
     </>
   );

@@ -23,7 +23,7 @@ export function normalizeCompactDatePrompt(value: string) {
 export async function POST(request: Request) {
   const { messages, locale, preferenceContext } = await request.json();
   const serializedPreferenceContext = preferenceContext
-    ? JSON.stringify(preferenceContext).slice(0, 2000)
+    ? JSON.stringify(preferenceContext).slice(0, 6000)
     : "none";
 
   const provider = createTravelAIProvider();
@@ -307,4 +307,3 @@ The previous response was malformed. Return exactly one valid raw JSON object no
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
-
