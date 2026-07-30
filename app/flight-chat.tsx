@@ -17,6 +17,33 @@ type ExplorationHubOption = {
   reason: string;
 };
 
+function hubCharacter(city: string, locale: Locale) {
+  if (locale === "zh") return `${city}的街区、美食与当地生活`;
+  if (locale === "ja") return `${city}の街並み、食文化、ローカルな暮らし`;
+  if (locale === "ko") return `${city}의 거리, 음식과 현지 생활`;
+  return `${city}'s neighborhoods, food, and local culture`;
+}
+
+function applyHubDetails(
+  options: ExplorationHubOption[],
+  details: unknown,
+): ExplorationHubOption[] {
+  if (!details || typeof details !== "object") return options;
+  const detailByCode = details as Record<string, unknown>;
+  return options.map((option) => {
+    const detail = detailByCode[option.code];
+    if (!detail || typeof detail !== "object") return option;
+    const value = detail as Record<string, unknown>;
+    const city = typeof value.city === "string" && value.city.trim()
+      ? value.city.trim()
+      : option.city;
+    const reason = typeof value.reason === "string" && value.reason.trim()
+      ? value.reason.trim()
+      : option.reason;
+    return { ...option, city, reason };
+  });
+}
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -97,7 +124,7 @@ function normalizeHubOptions(params: SearchParams): ExplorationHubOption[] {
           ? String(reasons[code]).trim()
           : "",
     }];
-  }).slice(0, 12);
+  });
 }
 
 function verifiedHubOptions(
@@ -108,13 +135,6 @@ function verifiedHubOptions(
   const suggested = normalizeHubOptions(params);
   const suggestionByCode = new Map(suggested.map((option) => [option.code, option]));
   const seen = new Set<string>();
-  const verifiedCopy = locale === "zh"
-    ? "实时联程航线已验证"
-    : locale === "ja"
-      ? "リアルタイムの乗り継ぎ便を確認済み"
-      : locale === "ko"
-        ? "실시간 연결편 확인됨"
-        : "Verified in live connecting itineraries";
   const options: ExplorationHubOption[] = [];
 
   for (const flight of flights) {
@@ -124,10 +144,11 @@ function verifiedHubOptions(
       if (!/^[A-Z]{3}$/.test(code) || seen.has(code)) continue;
       seen.add(code);
       const creative = suggestionByCode.get(code);
+      const city = creative?.city || airportCity(code, locale, flight.airportNames?.[code]);
       options.push({
         code,
-        city: creative?.city || airportCity(code, locale, flight.airportNames?.[code]),
-        reason: creative?.reason || verifiedCopy,
+        city,
+        reason: creative?.reason || hubCharacter(city, locale),
       });
     }
   }
@@ -137,8 +158,7 @@ function verifiedHubOptions(
       const leftSuggested = suggestionByCode.has(left.code) ? 1 : 0;
       const rightSuggested = suggestionByCode.has(right.code) ? 1 : 0;
       return rightSuggested - leftSuggested;
-    })
-    .slice(0, 12);
+    });
 }
 
 export function FlightChat({
@@ -196,6 +216,26 @@ export function FlightChat({
     }
   }
 
+  async function describeHubs(options: ExplorationHubOption[]) {
+    if (options.length === 0) return options;
+    try {
+      const response = await fetch("/api/chat/hub-characteristics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locale,
+          preferenceContext,
+          hubs: options.map(({ code, city }) => ({ code, city })),
+        }),
+      });
+      if (!response.ok) return options;
+      const data = await response.json();
+      return applyHubDetails(options, data.hubs);
+    } catch {
+      return options;
+    }
+  }
+
   async function handleSend() {
     const text = input.trim();
     if (!text || loading) return;
@@ -244,11 +284,10 @@ export function FlightChat({
             ...data.params,
             explorationHubs: [],
           });
-          setHubOptions(
-            discovery.flights
-              ? verifiedHubOptions(data.params, discovery.flights, locale)
-              : [],
-          );
+          const options = discovery.flights
+            ? verifiedHubOptions(data.params, discovery.flights, locale)
+            : [];
+          setHubOptions(await describeHubs(options));
         }
         setSelectedHubs([]);
         setPhase("ready");

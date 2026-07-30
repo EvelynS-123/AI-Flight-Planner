@@ -59,6 +59,10 @@ test("initial search uses one regular request plus two per selected hub", async 
     assert.equal(calls.length, 7);
     assert.equal(data.meta.providerRequests, 7);
     assert.equal(data.meta.requestLimit, 7);
+    assert.equal(new URL(calls[0]).searchParams.get("show_hidden"), "true");
+    assert.ok(calls.slice(1).every((url) =>
+      new URL(url).searchParams.get("show_hidden") === null
+    ));
     assert.ok(data.results.some((flight) => flight.explorationHub === "NRT"));
     assert.ok(data.results.some((flight) => flight.explorationHub === "HNL"));
     assert.ok(data.results.some((flight) => flight.explorationHub === "DOH"));

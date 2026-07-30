@@ -22,8 +22,8 @@ export type FlightResult = {
   flights?: any[]; // The raw flights array from SerpAPI
   isSelfTransfer?: boolean;
   riskPattern?: "A" | "B" | "C";
-  leg1?: any;
-  leg2?: any;
+  leg1?: FlightResult;
+  leg2?: FlightResult;
   airportNames?: Record<string, string>;
 };
 

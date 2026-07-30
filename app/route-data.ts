@@ -13,6 +13,14 @@ export type Segment = {
   stops: number;
 };
 
+export type LiveTicketSnapshot = {
+  price: number;
+  fareDate: string;
+  fareSource: string;
+  fareUrl: string;
+  flights: any[];
+};
+
 export type RouteOption = {
   id: string;
   origin: AirportCode;
@@ -24,6 +32,7 @@ export type RouteOption = {
   segments: Segment[];
   total: number;
   liveFlights?: any[];
+  liveTickets?: LiveTicketSnapshot[];
   airportNames?: Record<string, string>;
 };
 
