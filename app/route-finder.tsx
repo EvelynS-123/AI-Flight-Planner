@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import NumberFlow, { continuous } from "@number-flow/react";
-import { DEMO_DESTINATIONS as DESTINATIONS, DEMO_ORIGINS as ORIGINS, POPULAR_AIRPORTS, ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
+import { ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteOption, type RouteWeights } from "./route-data";
 import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./flight-schedules";
 import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
 import AITravelWorkspace from "./ai-travel-workspace";
@@ -40,13 +40,6 @@ function mapLiveFlightsToRouteOptions(flights: FlightResult[]): RouteOption[] {
   });
 }
 
-function formatMonthLabel(monthKey: string, locale: string): string {
-  // monthKey is "YYYY-MM" or legacy "Aug"/"Sep"
-  if (monthKey === "Aug") return new Date(2026, 7, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
-  if (monthKey === "Sep") return new Date(2026, 8, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
-  const [year, mm] = monthKey.split("-").map(Number);
-  return new Date(year, mm - 1, 1).toLocaleDateString(locale, { year: "numeric", month: "long" });
-}
 import {
   DEFAULT_PREFERENCE_LEVELS,
   FAVORITE_CITY_LIMIT,
@@ -166,8 +159,6 @@ export default function RouteFinder() {
   const [locale, setLocale] = useState<Locale>("zh");
   const [origin, setOrigin] = useState<AirportCode>("PVG");
   const [destination, setDestination] = useState<AirportCode>("LAX");
-  const [draftOrigin, setDraftOrigin] = useState<AirportCode>("PVG");
-  const [draftDestination, setDraftDestination] = useState<AirportCode>("LAX");
   const [month, setMonth] = useState<string>("Sep");
   const [weights, setWeights] = useState<RouteWeights>({ price: 30, interest: 35, directness: 35 });
   const [stopoverSelections, setStopoverSelections] = useState<StopoverSelections>({});
@@ -180,7 +171,7 @@ export default function RouteFinder() {
   const [closingRouteId, setClosingRouteId] = useState<string | null>(null);
   const [aiRouteId, setAiRouteId] = useState<string | null>(null);
   const [aiOriginRect, setAiOriginRect] = useState<DOMRect | null>(null);
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(true);
   const [liveFlights, setLiveFlights] = useState<RouteOption[] | null>(null);
   const [searched, setSearched] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -505,34 +496,32 @@ export default function RouteFinder() {
     }, 500);
   }
 
-  function extractAirportCode(input: string): string {
-    const match = input.match(/^([A-Za-z]{3})\s*·/);
-    if (match) return match[1].toUpperCase();
-    const codeMatch = input.match(/^[A-Za-z]{3}$/);
-    if (codeMatch) return codeMatch[0].toUpperCase();
-    return input;
-  }
-
-  function search() {
+  function beginChatSearch() {
     setIsLoading(true);
     setExpanded(null);
     setSearched(true);
-    
-    // Simulate API fetch delay for the Skeleton UI to show properly,
-    // since we fallback to local static data in this demo.
-    setTimeout(() => {
-      setLiveFlights(null); 
-      setOrigin(extractAirportCode(draftOrigin));
-      setDestination(extractAirportCode(draftDestination));
-      setIsLoading(false);
-    }, 1200);
+    setIsChatOpen(false);
   }
 
-  function swap() {
-    const nextOrigin = draftDestination;
-    const nextDestination = draftOrigin;
-    setDraftOrigin(nextOrigin);
-    setDraftDestination(nextDestination);
+  function completeChatSearch(flights: FlightResult[]) {
+    const mapped = mapLiveFlightsToRouteOptions(flights);
+    setLiveFlights(mapped);
+    setIsLoading(false);
+
+    const firstFlight = flights[0];
+    if (!firstFlight) return;
+
+    setOrigin(firstFlight.origin as AirportCode);
+    setDestination(firstFlight.destination as AirportCode);
+
+    const departureDate = firstFlight.departureTime.split(" ")[0];
+    const [year, monthNumber] = departureDate.split("-");
+    if (year && monthNumber) setMonth(`${year}-${monthNumber}`);
+  }
+
+  function failChatSearch() {
+    setIsLoading(false);
+    setIsChatOpen(true);
   }
 
   function storePreferences(next: TravelPreferenceState) {
@@ -602,8 +591,8 @@ export default function RouteFinder() {
   return (
     <>
     <main
-      className={`planner ${(quizOpen || isChatOpen) ? "preference-open" : ""} ${aiRoute ? "ai-workspace-open" : ""}`}
-      aria-hidden={quizOpen || isChatOpen || Boolean(aiRoute) || undefined}
+      className={`planner ${quizOpen ? "preference-open" : ""} ${aiRoute ? "ai-workspace-open" : ""}`}
+      aria-hidden={quizOpen || Boolean(aiRoute) || undefined}
     >
       <OriginalArtDefs />
       <header className="topbar">
@@ -612,7 +601,6 @@ export default function RouteFinder() {
           <span>AI Flight Planner</span>
         </a>
         <div className="topbar-actions">
-          <button className="preferences-button" type="button" onClick={() => setIsChatOpen(true)}><span aria-hidden="true">🤖</span>AI Assistant</button>
           <button className="preferences-button" type="button" onClick={openPreferences}><span aria-hidden="true">✦</span>{copy.preferences}</button>
           <span className="demo-badge">{copy.demoBadge}</span>
           <label className="language-picker">
@@ -636,48 +624,32 @@ export default function RouteFinder() {
           <p className="hero-copy">{copy.heroCopy}</p>
         </div>
 
-        <div className="search-card" aria-label={copy.searchAria}>
-          <datalist id="airports-list">
-            {POPULAR_AIRPORTS.map((code) => <option key={code} value={`${code} · ${airportCity(code, locale)}`}>{code} · {airportCity(code, locale)}</option>)}
-          </datalist>
-
-          <div className="field-grid">
-            <label className="select-field">
-              <span>{copy.from}</span>
-              <input 
-                type="text" 
-                aria-label={copy.from} 
-                list="airports-list"
-                value={draftOrigin} 
-                onChange={(event) => setDraftOrigin(event.target.value)} 
-                placeholder="PVG, LHR, 伦敦..."
-              />
-            </label>
-            <button className="swap-button" type="button" onClick={swap} aria-label={copy.swap}>↔</button>
-            <label className="select-field">
-              <span>{copy.to}</span>
-              <input 
-                type="text" 
-                aria-label={copy.to} 
-                list="airports-list"
-                value={draftDestination} 
-                onChange={(event) => setDraftDestination(event.target.value)} 
-                placeholder="LAX, CDG, 巴黎..."
-              />
-            </label>
-            <label className="select-field month-field">
-              <span>{copy.month}</span>
-              <select aria-label={copy.month} value={month} onChange={(event) => { setMonth(event.target.value); setLiveFlights(null); }}>
-                <option value="Aug">{formatMonthLabel("Aug", localeOption.intl)}</option>
-                <option value="Sep">{formatMonthLabel("Sep", localeOption.intl)}</option>
-                {month !== "Aug" && month !== "Sep" && (
-                  <option value={month}>{formatMonthLabel(month, localeOption.intl)}</option>
-                )}
-              </select>
-            </label>
-            <button className="search-button" type="button" onClick={search}>{copy.search}</button>
+        <div className={`assistant-search-shell ${isChatOpen ? "is-open" : "is-collapsed"}`}>
+          <div className="assistant-search-panel" hidden={!isChatOpen}>
+            <FlightChat
+              locale={locale}
+              isOpen={isChatOpen}
+              onClose={() => setIsChatOpen(false)}
+              onSearchStart={beginChatSearch}
+              onSearchComplete={completeChatSearch}
+              onSearchFailure={failChatSearch}
+            />
           </div>
-          <p className="search-note"><span aria-hidden="true">◉</span> {copy.searchNote}</p>
+          {!isChatOpen && (
+            <button
+              className="assistant-reopen"
+              type="button"
+              onClick={() => setIsChatOpen(true)}
+              aria-expanded="false"
+            >
+              <span className="assistant-reopen-icon" aria-hidden="true">{isLoading ? "•••" : "✈"}</span>
+              <span>
+                <strong>{isLoading ? copy.chatSearching : copy.chatReopen}</strong>
+                <small>{copy.chatAssistantHint}</small>
+              </span>
+              <i aria-hidden="true">↗</i>
+            </button>
+          )}
         </div>
       </section>
 
@@ -1056,52 +1028,6 @@ export default function RouteFinder() {
                 : <button className="quiz-primary" type="button" onClick={savePreferences}>{copy.quizSave}<span aria-hidden="true">✓</span></button>}
             </div>
           </footer>
-        </section>
-      </div>
-    )}
-    {isChatOpen && (
-      <div className="preference-overlay" onClick={() => setIsChatOpen(false)}>
-        <section
-          className="preference-dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-label="AI Flight Assistant"
-          onClick={(e) => e.stopPropagation()}
-          style={{ width: "90%", maxWidth: "800px", height: "85vh", display: "flex", flexDirection: "column", padding: "16px" }}
-        >
-          <header className="preference-header" style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--line)" }}>
-            <h2 style={{ fontSize: "20px", color: "var(--ink)" }}>AI Flight Assistant</h2>
-            <button className="quiz-close" type="button" onClick={() => setIsChatOpen(false)} aria-label="Close chat">×</button>
-          </header>
-          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <FlightChat 
-              key={locale} 
-              locale={locale} 
-              weights={weights}
-              onWeightsChange={setWeights}
-              onSearchComplete={(flights) => {
-                if (flights && flights.length > 0) {
-                  const mapped = mapLiveFlightsToRouteOptions(flights);
-                  setLiveFlights(mapped);
-                  
-                  const newOrigin = flights[0].origin as AirportCode;
-                  const newDestination = flights[0].destination as AirportCode;
-                  setOrigin(newOrigin);
-                  setDestination(newDestination);
-                  setDraftOrigin(`${newOrigin} · ${airportCity(newOrigin, locale)}`);
-                  setDraftDestination(`${newDestination} · ${airportCity(newDestination, locale)}`);
-
-                  // Sync month from the first flight's departure date
-                  const depDate = flights[0].departureTime.split(" ")[0];
-                  if (depDate) {
-                    const [year, mm] = depDate.split("-");
-                    setMonth(`${year}-${mm}`);
-                  }
-                }
-                setIsChatOpen(false);
-              }}
-            />
-          </div>
         </section>
       </div>
     )}
