@@ -5,6 +5,18 @@ import { COPY, type Locale } from "./i18n";
 import type { FlightResult } from "./flight-results";
 import { groupFlightResults } from "./flights/group-results";
 
+type SearchParams = Record<string, unknown> & {
+  explorationHubOptions?: unknown;
+  explorationHubs?: unknown;
+  explorationHubReasons?: unknown;
+};
+
+type ExplorationHubOption = {
+  code: string;
+  city: string;
+  reason: string;
+};
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -20,9 +32,73 @@ type FlightChatProps = {
   isOpen: boolean;
   onClose: () => void;
   onSearchStart: () => void;
-  onSearchComplete: (flights: FlightResult[]) => void;
+  onSearchComplete: (flights: FlightResult[], searchParams: SearchParams) => void;
   onSearchFailure: () => void;
 };
+
+function hubSelectorCopy(locale: Locale) {
+  if (locale === "zh") return {
+    title: "限定中转城市",
+    hint: "仅探索你选择的城市，最多 3 个",
+    selected: (count: number) => `已选 ${count}/3`,
+    searches: (count: number) => `预计 ${1 + count * 2} 次实时搜索`,
+  };
+  if (locale === "ja") return {
+    title: "乗り継ぎ都市を選択",
+    hint: "選択した都市のみ探索、最大3都市",
+    selected: (count: number) => `${count}/3 選択済み`,
+    searches: (count: number) => `リアルタイム検索は約${1 + count * 2}回`,
+  };
+  if (locale === "ko") return {
+    title: "경유 도시 선택",
+    hint: "선택한 도시만 탐색하며 최대 3개까지 가능합니다",
+    selected: (count: number) => `${count}/3 선택됨`,
+    searches: (count: number) => `실시간 검색 약 ${1 + count * 2}회`,
+  };
+  return {
+    title: "Choose stopover cities",
+    hint: "Only selected cities are explored, up to 3",
+    selected: (count: number) => `${count}/3 selected`,
+    searches: (count: number) => `About ${1 + count * 2} live searches`,
+  };
+}
+
+function normalizeHubOptions(params: SearchParams): ExplorationHubOption[] {
+  const options = Array.isArray(params.explorationHubOptions)
+    ? params.explorationHubOptions
+    : [];
+  const reasons = params.explorationHubReasons && typeof params.explorationHubReasons === "object"
+    ? params.explorationHubReasons as Record<string, unknown>
+    : {};
+  const legacyCodes = Array.isArray(params.explorationHubs)
+    ? params.explorationHubs
+    : [];
+  const candidates = options.length
+    ? options
+    : legacyCodes.map((code) => ({ code, city: code, reason: reasons[String(code)] }));
+  const seen = new Set<string>();
+
+  return candidates.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const value = candidate as Record<string, unknown>;
+    const code = typeof value.code === "string"
+      ? value.code.trim().toUpperCase()
+      : "";
+    if (!/^[A-Z]{3}$/.test(code) || seen.has(code)) return [];
+    seen.add(code);
+    return [{
+      code,
+      city: typeof value.city === "string" && value.city.trim()
+        ? value.city.trim()
+        : code,
+      reason: typeof value.reason === "string"
+        ? value.reason.trim()
+        : typeof reasons[code] === "string"
+          ? String(reasons[code]).trim()
+          : "",
+    }];
+  }).slice(0, 6);
+}
 
 export function FlightChat({
   locale,
@@ -40,7 +116,9 @@ export function FlightChat({
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [phase, setPhase] = useState<Phase>("chat");
-  const [searchParams, setSearchParams] = useState<unknown>(null);
+  const [searchParams, setSearchParams] = useState<SearchParams | null>(null);
+  const [hubOptions, setHubOptions] = useState<ExplorationHubOption[]>([]);
+  const [selectedHubs, setSelectedHubs] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -116,6 +194,12 @@ export function FlightChat({
 
       if (data.searchReady && data.params) {
         setSearchParams(data.params);
+        const hasRequiredMultiLegRoute =
+          Array.isArray(data.params.legs) && data.params.legs.length > 1;
+        setHubOptions(
+          hasRequiredMultiLegRoute ? [] : normalizeHubOptions(data.params),
+        );
+        setSelectedHubs([]);
         setPhase("ready");
       }
     } catch {
@@ -140,7 +224,11 @@ export function FlightChat({
     onSearchStart();
 
     try {
-      const result = await searchFlights(searchParams);
+      const submittedParams = {
+        ...searchParams,
+        explorationHubs: selectedHubs,
+      };
+      const result = await searchFlights(submittedParams);
       const withoutSearching = (current: ChatMessage[]) => current.filter((message) => !message.searching);
 
       if (result.error) {
@@ -172,7 +260,7 @@ export function FlightChat({
         },
       ]);
       setPhase("chat");
-      onSearchComplete(flights);
+      onSearchComplete(flights, submittedParams);
     } catch {
       setMessages((current) => [
         ...current.filter((message) => !message.searching),
@@ -191,6 +279,16 @@ export function FlightChat({
       handleSend();
     }
   }
+
+  function toggleHub(code: string) {
+    setSelectedHubs((current) => {
+      if (current.includes(code)) return current.filter((item) => item !== code);
+      if (current.length >= 3) return current;
+      return [...current, code];
+    });
+  }
+
+  const hubCopy = hubSelectorCopy(locale);
 
   return (
     <section className="flight-chat" aria-label="Flight search chat">
@@ -227,6 +325,42 @@ export function FlightChat({
 
       {phase === "ready" ? (
         <div className="chat-search-action">
+          {hubOptions.length > 0 && (
+            <div className="chat-hub-selector">
+              <div className="chat-hub-selector-heading">
+                <div>
+                  <strong>{hubCopy.title}</strong>
+                  <span>{hubCopy.hint}</span>
+                </div>
+                <div>
+                  <strong>{hubCopy.selected(selectedHubs.length)}</strong>
+                  <span>{hubCopy.searches(selectedHubs.length)}</span>
+                </div>
+              </div>
+              <div className="chat-hub-options" role="group" aria-label={hubCopy.title}>
+                {hubOptions.map((option) => {
+                  const selected = selectedHubs.includes(option.code);
+                  const disabled = !selected && selectedHubs.length >= 3;
+                  return (
+                    <button
+                      key={option.code}
+                      className={`chat-hub-option${selected ? " selected" : ""}`}
+                      type="button"
+                      aria-pressed={selected}
+                      disabled={disabled}
+                      onClick={() => toggleHub(option.code)}
+                    >
+                      <span>
+                        <strong>{option.city}</strong>
+                        <i>{option.code}</i>
+                      </span>
+                      {option.reason && <small>{option.reason}</small>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <button className="search-button" type="button" onClick={handleSearchConfirm} disabled={loading}>
             <span>{copy.search}</span>
             <i aria-hidden="true">→</i>

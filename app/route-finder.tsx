@@ -10,6 +10,8 @@ import { FlightChat } from "./flight-chat";
 import type { FlightResult } from "./flight-results";
 import { groupFlightResults, ticketTypeForFlight, type FlightResultGroup } from "./flights/group-results";
 
+type LiveSearchContext = Record<string, unknown>;
+
 function mapLiveFlightGroupsToRouteOptions(
   groups: FlightResultGroup[],
   selections: Record<string, string>,
@@ -61,24 +63,40 @@ function liveFlightOptionLabel(flight: FlightResult, locale: Locale): string {
 
 function liveFlightPickerCopy(locale: Locale) {
   if (locale === "zh") return {
-    title: "可选日期与时刻",
-    label: "选择出发日期和时刻",
-    count: (value: number) => `${value} 个可选航班`,
+    title: "按需查询日期与时刻",
+    dateLabel: "选择出发日期",
+    timeLabel: "选择当天时刻",
+    cost: (multiCity: boolean) => `查询该日期会使用 ${multiCity ? 2 : 1} 次实时搜索`,
+    loading: "正在查询该日期…",
+    empty: "该日期没有同航司、同路线的航班",
+    count: (value: number) => `${value} 个当天航班`,
   };
   if (locale === "ko") return {
-    title: "선택 가능한 날짜와 시간",
-    label: "출발 날짜와 시간 선택",
-    count: (value: number) => `${value}개 항공편 옵션`,
+    title: "날짜와 시간 필요 시 검색",
+    dateLabel: "출발 날짜 선택",
+    timeLabel: "해당 날짜 시간 선택",
+    cost: (multiCity: boolean) => `이 날짜는 실시간 검색 ${multiCity ? 2 : 1}회를 사용합니다`,
+    loading: "해당 날짜를 검색하는 중…",
+    empty: "같은 항공사와 경로의 항공편이 없습니다",
+    count: (value: number) => `해당 날짜 항공편 ${value}개`,
   };
   if (locale === "ja") return {
-    title: "選べる日付と時刻",
-    label: "出発日と時刻を選択",
-    count: (value: number) => `${value}件のフライト候補`,
+    title: "日付と時刻を必要時に検索",
+    dateLabel: "出発日を選択",
+    timeLabel: "当日の時刻を選択",
+    cost: (multiCity: boolean) => `この日付はリアルタイム検索を${multiCity ? 2 : 1}回使用します`,
+    loading: "この日付を検索中…",
+    empty: "同じ航空会社・経路の便がありません",
+    count: (value: number) => `当日の便 ${value}件`,
   };
   return {
-    title: "Available dates and times",
-    label: "Choose departure date and time",
-    count: (value: number) => `${value} flight options`,
+    title: "Search dates and times on demand",
+    dateLabel: "Choose departure date",
+    timeLabel: "Choose a time that day",
+    cost: (multiCity: boolean) => `This date uses ${multiCity ? 2 : 1} live searches`,
+    loading: "Searching this date…",
+    empty: "No flights match this airline and route on that date",
+    count: (value: number) => `${value} flights that day`,
   };
 }
 
@@ -216,6 +234,10 @@ export default function RouteFinder() {
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [liveFlightGroups, setLiveFlightGroups] = useState<FlightResultGroup[] | null>(null);
   const [selectedLiveFlightIds, setSelectedLiveFlightIds] = useState<Record<string, string>>({});
+  const [liveSearchContext, setLiveSearchContext] = useState<LiveSearchContext | null>(null);
+  const [selectedVariantDates, setSelectedVariantDates] = useState<Record<string, string>>({});
+  const [variantLoading, setVariantLoading] = useState<Record<string, boolean>>({});
+  const [variantErrors, setVariantErrors] = useState<Record<string, boolean>>({});
   const [searched, setSearched] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -224,6 +246,7 @@ export default function RouteFinder() {
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
   const closingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const routeSwitchToken = useRef(0);
+  const variantRequestTokens = useRef(new Map<string, number>());
   const expandAnchor = useRef<{ id: string; top: number; startedAt: number } | null>(null);
   const expandAnchorFrame = useRef<number | null>(null);
   const previousScrollBehavior = useRef("");
@@ -557,12 +580,26 @@ export default function RouteFinder() {
     setIsChatOpen(false);
   }
 
-  function completeChatSearch(flights: FlightResult[]) {
+  function completeChatSearch(
+    flights: FlightResult[],
+    searchContext: LiveSearchContext,
+  ) {
     const groups = groupFlightResults(flights);
     setLiveFlightGroups(groups);
     setSelectedLiveFlightIds(Object.fromEntries(
       groups.map((group) => [group.id, group.defaultVariantId]),
     ));
+    setSelectedVariantDates(Object.fromEntries(
+      groups.map((group) => {
+        const defaultVariant = group.variants.find(
+          (variant) => variant.id === group.defaultVariantId,
+        ) ?? group.variants[0];
+        return [group.id, defaultVariant.departureTime.slice(0, 10)];
+      }),
+    ));
+    setVariantLoading({});
+    setVariantErrors({});
+    setLiveSearchContext(searchContext);
     setIsLoading(false);
 
     const firstFlight = flights[0];
@@ -578,6 +615,88 @@ export default function RouteFinder() {
 
   function selectLiveFlightVariant(groupId: string, flightId: string) {
     setSelectedLiveFlightIds((current) => ({ ...current, [groupId]: flightId }));
+  }
+
+  async function selectLiveFlightDate(groupId: string, date: string) {
+    const group = liveFlightGroupById.get(groupId);
+    if (!group || !liveSearchContext) return;
+
+    setSelectedVariantDates((current) => ({ ...current, [groupId]: date }));
+    setVariantErrors((current) => ({ ...current, [groupId]: false }));
+
+    const knownVariants = group.variants.filter(
+      (variant) => variant.departureTime.slice(0, 10) === date,
+    );
+    if (knownVariants.length > 0) {
+      const cheapest = knownVariants.reduce((best, candidate) =>
+        candidate.price < best.price ? candidate : best
+      );
+      selectLiveFlightVariant(groupId, cheapest.id);
+      return;
+    }
+
+    const representative = group.variants.find(
+      (variant) => variant.id === selectedLiveFlightIds[groupId],
+    ) ?? group.variants[0];
+    const requestToken = (variantRequestTokens.current.get(groupId) ?? 0) + 1;
+    variantRequestTokens.current.set(groupId, requestToken);
+    setVariantLoading((current) => ({ ...current, [groupId]: true }));
+
+    try {
+      const response = await fetch("/api/flights/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...liveSearchContext,
+          variantRequest: {
+            date,
+            groupKey: group.key,
+            representative,
+          },
+        }),
+      });
+      if (!response.ok) throw new Error("variant_search_failed");
+      const data = await response.json();
+      if (variantRequestTokens.current.get(groupId) !== requestToken) return;
+
+      const flights = (data.results || []) as FlightResult[];
+      if (flights.length === 0) {
+        setVariantErrors((current) => ({ ...current, [groupId]: true }));
+        return;
+      }
+
+      const merged = groupFlightResults([...group.variants, ...flights])
+        .find((candidate) => candidate.key === group.key);
+      if (!merged) {
+        setVariantErrors((current) => ({ ...current, [groupId]: true }));
+        return;
+      }
+
+      const dateVariants = merged.variants.filter(
+        (variant) => variant.departureTime.slice(0, 10) === date,
+      );
+      if (dateVariants.length === 0) {
+        setVariantErrors((current) => ({ ...current, [groupId]: true }));
+        return;
+      }
+      const cheapest = dateVariants.reduce((best, candidate) =>
+        candidate.price < best.price ? candidate : best
+      );
+      setLiveFlightGroups((current) =>
+        current?.map((candidate) =>
+          candidate.id === groupId ? { ...merged, id: groupId } : candidate
+        ) ?? null
+      );
+      selectLiveFlightVariant(groupId, cheapest.id);
+    } catch {
+      if (variantRequestTokens.current.get(groupId) === requestToken) {
+        setVariantErrors((current) => ({ ...current, [groupId]: true }));
+      }
+    } finally {
+      if (variantRequestTokens.current.get(groupId) === requestToken) {
+        setVariantLoading((current) => ({ ...current, [groupId]: false }));
+      }
+    }
   }
 
   function failChatSearch() {
@@ -800,6 +919,23 @@ export default function RouteFinder() {
                 const ticket = ticketCopy(route, copy);
                 const liveGroup = liveFlightGroupById.get(route.id);
                 const pickerCopy = liveFlightPickerCopy(locale);
+                const selectedVariantDate = liveGroup
+                  ? selectedVariantDates[route.id]
+                    ?? liveGroup.variants[0].departureTime.slice(0, 10)
+                  : "";
+                const variantsForDate = liveGroup
+                  ? liveGroup.variants.filter(
+                    (flight) => flight.departureTime.slice(0, 10) === selectedVariantDate,
+                  )
+                  : [];
+                const variantIsLoading = Boolean(variantLoading[route.id]);
+                const variantHasError = Boolean(variantErrors[route.id]);
+                const variantDateMin = typeof liveSearchContext?.dateRangeStart === "string"
+                  ? liveSearchContext.dateRangeStart
+                  : undefined;
+                const variantDateMax = typeof liveSearchContext?.dateRangeEnd === "string"
+                  ? liveSearchContext.dateRangeEnd
+                  : undefined;
                 return (
                   <div className="route-motion" key={route.id} ref={(element) => { if (element) cardRefs.current.set(route.id, element); else cardRefs.current.delete(route.id); }}>
                   <article className={`route-card ${isOpen ? "open" : ""}`}>
@@ -852,26 +988,52 @@ export default function RouteFinder() {
 
                     <div className="route-details" aria-hidden={!isOpen}>
                       {keepDetailsMounted && <div className="details-inner" inert={!isOpen}>
-                        {liveGroup && liveGroup.variants.length > 1 && (
+                        {liveGroup && (
                           <div className="live-variant-picker">
-                            <div>
+                            <div className="live-variant-summary">
                               <span>{pickerCopy.title}</span>
-                              <strong>{pickerCopy.count(liveGroup.variants.length)}</strong>
+                              <strong>{pickerCopy.count(variantsForDate.length)}</strong>
+                              <small>{pickerCopy.cost(route.ticketType === "multi-city")}</small>
                             </div>
                             <label>
-                              <span>{pickerCopy.label}</span>
+                              <span>{pickerCopy.dateLabel}</span>
+                              <input
+                                type="date"
+                                min={variantDateMin}
+                                max={variantDateMax}
+                                value={selectedVariantDate}
+                                disabled={variantIsLoading}
+                                onChange={(event) => {
+                                  void selectLiveFlightDate(route.id, event.target.value);
+                                }}
+                              />
+                            </label>
+                            <label>
+                              <span>{pickerCopy.timeLabel}</span>
                               <select
-                                aria-label={`${pickerCopy.label} · ${route.origin} → ${route.destination}`}
-                                value={selectedLiveFlightIds[route.id] ?? liveGroup.defaultVariantId}
+                                aria-label={`${pickerCopy.timeLabel} · ${route.origin} → ${route.destination}`}
+                                value={variantsForDate.some(
+                                  (flight) => flight.id === selectedLiveFlightIds[route.id],
+                                )
+                                  ? selectedLiveFlightIds[route.id]
+                                  : variantsForDate[0]?.id ?? ""}
+                                disabled={variantIsLoading || variantsForDate.length === 0}
                                 onChange={(event) => selectLiveFlightVariant(route.id, event.target.value)}
                               >
-                                {liveGroup.variants.map((flight) => (
+                                {variantsForDate.map((flight) => (
                                   <option key={flight.id} value={flight.id}>
                                     {liveFlightOptionLabel(flight, locale)}
                                   </option>
                                 ))}
                               </select>
                             </label>
+                            <div className="live-variant-status" aria-live="polite">
+                              {variantIsLoading
+                                ? pickerCopy.loading
+                                : variantHasError
+                                  ? pickerCopy.empty
+                                  : null}
+                            </div>
                           </div>
                         )}
                         <div className="details-actions">
