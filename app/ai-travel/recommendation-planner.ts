@@ -1082,7 +1082,7 @@ export async function generateTravelRecommendations(
       )
     ));
   }
-  const rejectedRecommendationCount = rawStopovers.reduce((total, stopover, index) => {
+  const rejectedRecommendationCount = rawStopovers.reduce<number>((total, stopover, index) => {
     const rawCount = stopover && typeof stopover === "object"
       && Array.isArray((stopover as Record<string, unknown>).recommendations)
       ? ((stopover as Record<string, unknown>).recommendations as unknown[]).length

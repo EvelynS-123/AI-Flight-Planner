@@ -3,7 +3,14 @@
 /.vinext
 /dist
 /.wrangler
+/.agents
+/.codex
+/.recovery-backup-*
 /.env*
 !/.env.example
+*.tsbuildinfo
 *.log
 /work
+/coverage
+.DS_Store
+Thumbs.db

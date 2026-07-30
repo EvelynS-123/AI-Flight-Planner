@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { COPY, airportCity, type Locale } from "./i18n";
+import { COPY, airportCity, type Copy, type Locale } from "./i18n";
 import type { FlightResult } from "./flight-results";
 import { groupFlightResults } from "./flights/group-results";
 
@@ -44,11 +44,15 @@ function applyHubDetails(
   });
 }
 
+type StringCopyKey = {
+  [Key in keyof Copy]: Copy[Key] extends string ? Key : never;
+}[keyof Copy];
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   searching?: boolean;
-  systemMsgKey?: keyof typeof COPY["en"];
+  systemMsgKey?: StringCopyKey;
 };
 
 type Phase = "chat" | "ready" | "searching";

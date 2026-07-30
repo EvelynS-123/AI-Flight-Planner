@@ -609,7 +609,7 @@ function sanitizeItems(
   }
 
   flattened.sort((a, b) => a.item.startOffsetMinutes - b.item.startOffsetMinutes);
-  const scheduled: typeof flattened = [];
+  const scheduled: Array<Pick<(typeof flattened)[number], "dayLabel" | "item">> = [];
   let cursor = cityWindowStart;
   let previousActivity: TravelPlanItem | null = null;
   const arrivalUtc = request.route.stopovers[stopoverIndex].arrival.utc;
@@ -631,7 +631,7 @@ function sanitizeItems(
       && scheduledActivityMinutes > 0
       && !isMissingRequiredType
     ) continue;
-    const sameLocation = previousActivity
+    const sameLocation = previousActivity !== null
       && previousActivity.location.trim().toLowerCase() === entry.item.location.trim().toLowerCase();
     const transitMinutes = previousActivity
       ? sameLocation
@@ -863,7 +863,7 @@ function buildJourneyTimeline(
   }
   const cityItems = stopover.days.flatMap((day) => day.items)
     .sort((a, b) => a.startOffsetMinutes - b.startOffsetMinutes);
-  const journey: TravelPlanItem[] = [
+  const initialJourney: TravelPlanItem[] = [
     {
       startOffsetMinutes: 0,
       endOffsetMinutes: deplaneMinutes,
@@ -891,7 +891,10 @@ function buildJourneyTimeline(
       sourceUrl: stopover.outboundTransitSourceUrl,
       sourceTitle: stopover.outboundTransitMode,
     },
-  ].filter((item) => item.endOffsetMinutes > item.startOffsetMinutes);
+  ];
+  const journey = initialJourney.filter(
+    (item) => item.endOffsetMinutes > item.startOffsetMinutes,
+  );
 
   let cursor = stopover.cityWindowStartOffsetMinutes;
   for (const item of cityItems) {

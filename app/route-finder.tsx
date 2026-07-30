@@ -2,7 +2,14 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import NumberFlow, { continuous } from "@number-flow/react";
-import { ROUTES, moveWeightBoundary, scoreRoutes, type AirportCode, type RouteWeights } from "./route-data";
+import {
+  ROUTES,
+  moveWeightBoundary,
+  scoreRoutes,
+  type AirportCode,
+  type RouteOption,
+  type RouteWeights,
+} from "./route-data";
 import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./flight-schedules";
 import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
 import AITravelWorkspace from "./ai-travel-workspace";
