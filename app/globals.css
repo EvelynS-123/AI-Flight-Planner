@@ -692,7 +692,7 @@ footer p { max-width: 680px; margin: 0; text-align: right; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .topbar, .flight-chat, .assistant-reopen, .route-card, .live-variant-picker, .variant-control, .chat-hub-option, .preference-dialog, .ai-workspace-header, .ai-chat-sheet, .ai-pace-control { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .topbar, .flight-chat, .assistant-reopen, .route-card, .live-variant-picker, .variant-control, .chat-hub-option, .route-search-loader, .preference-dialog, .ai-workspace-header, .ai-chat-sheet, .ai-pace-control { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .preference-overlay { background: rgba(30, 61, 90, 0.58); backdrop-filter: none; -webkit-backdrop-filter: none; }
   .planner.preference-open, .planner.ai-workspace-open { filter: none; transform: scale(0.994); }
 }
@@ -834,6 +834,8 @@ footer p { max-width: 680px; margin: 0; text-align: right; }
   40% { opacity: 1; transform: scale(1.1); }
 }
 
+.chat-thinking { max-width: 85%; border-bottom-left-radius: 6px; box-shadow: 0 8px 22px rgba(58, 126, 168, 0.08); font-weight: 650; }
+
 /* ─── Chat Input ─── */
 
 .flight-chat-input-area {
@@ -929,6 +931,88 @@ footer p { max-width: 680px; margin: 0; text-align: right; }
 .chat-search-action .search-button:disabled { opacity: 0.52; cursor: wait; transform: none; }
 .chat-search-status { min-height: 54px; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .chat-search-status .chat-send-loading { border-color: rgba(5, 103, 232, 0.18); border-top-color: var(--blue); }
+
+.route-search-loader {
+  position: relative;
+  z-index: 2;
+  width: min(440px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  margin: 0 auto 18px;
+  padding: 18px 24px 16px;
+  color: var(--muted);
+  background: rgba(249, 253, 255, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 22px;
+  box-shadow: 0 16px 42px rgba(58, 126, 168, 0.12);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  animation: routeLoaderMaterialize 360ms var(--spring) both;
+}
+
+.route-search-loader strong {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.route-search-motion {
+  position: relative;
+  width: min(280px, 68vw);
+  height: 28px;
+  display: grid;
+  grid-template-columns: 8px 1fr 8px;
+  align-items: center;
+  gap: 9px;
+}
+
+.route-search-endpoint {
+  width: 8px;
+  height: 8px;
+  background: white;
+  border: 2px solid rgba(58, 126, 168, 0.64);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(58, 126, 168, 0.08);
+}
+
+.route-search-track {
+  height: 2px;
+  background: linear-gradient(90deg, rgba(58, 126, 168, 0.12), rgba(58, 126, 168, 0.42), rgba(58, 126, 168, 0.12));
+  border-radius: 999px;
+}
+
+.route-search-plane {
+  position: absolute;
+  left: 17px;
+  top: 50%;
+  color: var(--blue);
+  font-size: 18px;
+  line-height: 1;
+  filter: drop-shadow(0 4px 6px rgba(58, 126, 168, 0.22));
+  transform: translate3d(0, -50%, 0) rotate(5deg);
+  animation: routePlaneTravel 1.45s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes routeLoaderMaterialize {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes routePlaneTravel {
+  0% { opacity: 0; transform: translate3d(0, -50%, 0) rotate(5deg) scale(0.92); }
+  14% { opacity: 1; }
+  86% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(calc(min(280px, 68vw) - 52px), -50%, 0) rotate(5deg) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-search-plane {
+    opacity: 1;
+    transform: translate3d(calc((min(280px, 68vw) - 52px) / 2), -50%, 0) rotate(5deg);
+  }
+}
 
 /* ─── Flight Results ─── */
 

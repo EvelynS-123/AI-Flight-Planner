@@ -467,6 +467,16 @@ export function FlightChat({
             ) : null}
           </div>
         ))}
+        {loading && phase === "chat" && (
+          <div className="chat-message assistant">
+            <div className="chat-searching chat-thinking" role="status">
+              <span className="chat-searching-dots" aria-hidden="true">
+                <span /><span /><span />
+              </span>
+              <span>{copy.chatThinking}</span>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
