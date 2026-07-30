@@ -589,6 +589,10 @@ test("all four locales cover the interface and airports", () => {
 test("less common airports show a city or live provider name instead of only a code", () => {
   assert.equal(airportCity("HAK", "zh"), "海口");
   assert.equal(airportCity("AUH", "zh"), "阿布扎比");
+  assert.equal(airportCity("DPS", "zh", "Denpasar-Bali Island"), "丹帕沙");
+  assert.equal(airportCity("DPS", "ja"), "デンパサール");
+  assert.ok(Object.keys(AIRPORT_CITIES.zh).length > 5_000);
+  assert.ok(Object.keys(AIRPORT_CITIES.ko).length > 5_000);
   assert.equal(
     airportCity("XYZ", "en", "Example Regional Airport"),
     "Example Regional Airport",

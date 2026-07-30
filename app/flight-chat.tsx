@@ -148,7 +148,7 @@ function verifiedHubOptions(
       if (!/^[A-Z]{3}$/.test(code) || seen.has(code)) continue;
       seen.add(code);
       const creative = suggestionByCode.get(code);
-      const city = creative?.city || airportCity(code, locale, flight.airportNames?.[code]);
+      const city = airportCity(code, locale, flight.airportNames?.[code]);
       options.push({
         code,
         city,

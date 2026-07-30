@@ -1,3 +1,5 @@
+import localizedAirportNames from "./data/airport-localized-names.json" with { type: "json" };
+
 export const LOCALE_OPTIONS = [
   { code: "zh", label: "简中", htmlLang: "zh-CN", intl: "zh-CN" },
   { code: "en", label: "EN", htmlLang: "en", intl: "en-US" },
@@ -541,12 +543,35 @@ export const COPY: Record<Locale, Copy> = {
   },
 };
 
-export const AIRPORT_CITIES: Record<Locale, Record<string, string>> = {
+const CURATED_AIRPORT_CITIES: Record<Locale, Record<string, string>> = {
   zh: { PVG: "上海", PEK: "北京", HKG: "香港", TPE: "台北", ICN: "首尔", KIX: "大阪", NRT: "东京", HND: "东京", HNL: "檀香山", CAN: "广州", WUH: "武汉", HAK: "海口", MNL: "马尼拉", LAX: "洛杉矶", SFO: "旧金山", SEA: "西雅图", YVR: "温哥华", JFK: "纽约", ORD: "芝加哥", LHR: "伦敦", CDG: "巴黎", FRA: "法兰克福", AMS: "阿姆斯特丹", FCO: "罗马", ZRH: "苏黎世", GVA: "日内瓦", MUC: "慕尼黑", VIE: "维也纳", HEL: "赫尔辛基", ATH: "雅典", IST: "伊斯坦布尔", DXB: "迪拜", AUH: "阿布扎比", DOH: "多哈", DEL: "德里", BOM: "孟买", CMB: "科伦坡", CTU: "成都", KUL: "吉隆坡", SGN: "胡志明市", PUS: "釜山", OGG: "茂宜岛", AKL: "奥克兰", MEL: "墨尔本", SYD: "悉尼", SIN: "新加坡", BKK: "曼谷" },
   en: { PVG: "Shanghai", PEK: "Beijing", HKG: "Hong Kong", TPE: "Taipei", ICN: "Seoul", KIX: "Osaka", NRT: "Tokyo", HND: "Tokyo", HNL: "Honolulu", CAN: "Guangzhou", WUH: "Wuhan", HAK: "Haikou", MNL: "Manila", LAX: "Los Angeles", SFO: "San Francisco", SEA: "Seattle", YVR: "Vancouver", JFK: "New York", ORD: "Chicago", LHR: "London", CDG: "Paris", FRA: "Frankfurt", AMS: "Amsterdam", FCO: "Rome", ZRH: "Zurich", GVA: "Geneva", MUC: "Munich", VIE: "Vienna", HEL: "Helsinki", ATH: "Athens", IST: "Istanbul", DXB: "Dubai", AUH: "Abu Dhabi", DOH: "Doha", DEL: "Delhi", BOM: "Mumbai", CMB: "Colombo", CTU: "Chengdu", KUL: "Kuala Lumpur", SGN: "Ho Chi Minh City", PUS: "Busan", OGG: "Maui", AKL: "Auckland", MEL: "Melbourne", SYD: "Sydney", SIN: "Singapore", BKK: "Bangkok" },
   ko: { PVG: "상하이", PEK: "베이징", HKG: "홍콩", TPE: "타이베이", ICN: "서울", KIX: "오사카", NRT: "도쿄", HND: "도쿄", HNL: "호놀룰루", CAN: "광저우", WUH: "우한", HAK: "하이커우", MNL: "마닐라", LAX: "로스앤젤레스", SFO: "샌프란시스코", SEA: "시애틀", YVR: "밴쿠버", JFK: "뉴욕", ORD: "시카고", LHR: "런던", CDG: "파리", FRA: "프랑크푸르트", AMS: "암스테르담", FCO: "로마", ZRH: "취리히", GVA: "제네바", MUC: "뮌헨", VIE: "빈", HEL: "헬싱키", ATH: "아테네", IST: "이스탄불", DXB: "두바이", AUH: "아부다비", DOH: "도하", DEL: "델리", BOM: "뭄바이", CMB: "콜롬보", CTU: "청두", KUL: "쿠알라룸푸르", SGN: "호찌민시", PUS: "부산", OGG: "마우이", AKL: "오클랜드", MEL: "멜버른", SYD: "시드니", SIN: "싱가포르", BKK: "방콕" },
   ja: { PVG: "上海", PEK: "北京", HKG: "香港", TPE: "台北", ICN: "ソウル", KIX: "大阪", NRT: "東京", HND: "東京", HNL: "ホノルル", CAN: "広州", WUH: "武漢", HAK: "海口", MNL: "マニラ", LAX: "ロサンゼルス", SFO: "サンフランシスコ", SEA: "シアトル", YVR: "バンクーバー", JFK: "ニューヨーク", ORD: "シカゴ", LHR: "ロンドン", CDG: "パリ", FRA: "フランクフルト", AMS: "アムステルダム", FCO: "ローマ", ZRH: "チューリッヒ", GVA: "ジュネーブ", MUC: "ミュンヘン", VIE: "ウィーン", HEL: "ヘルシンキ", ATH: "アテネ", IST: "イスタンブール", DXB: "ドバイ", AUH: "アブダビ", DOH: "ドーハ", DEL: "デリー", BOM: "ムンバイ", CMB: "コロンボ", CTU: "成都", KUL: "クアラルンプール", SGN: "ホーチミン", PUS: "釜山", OGG: "マウイ", AKL: "オークランド", MEL: "メルボルン", SYD: "シドニー", SIN: "シンガポール", BKK: "バンコク" },
 };
+
+const LOCALIZED_AIRPORT_NAMES = localizedAirportNames as Record<
+  string,
+  Partial<Record<Locale, string>>
+>;
+
+export const AIRPORT_CITIES = Object.fromEntries(
+  LOCALE_OPTIONS.map(({ code: locale }) => {
+    const completeNames = Object.fromEntries(
+      Object.entries(LOCALIZED_AIRPORT_NAMES).flatMap(([airport, names]) => {
+        const city = names[locale]?.trim() || names.en?.trim();
+        return city ? [[airport, city]] : [];
+      }),
+    );
+    return [
+      locale,
+      {
+        ...completeNames,
+        ...CURATED_AIRPORT_CITIES[locale],
+      },
+    ];
+  }),
+) as Record<Locale, Record<string, string>>;
 
 export function airportCity(code: string, locale: Locale, providerName?: string) {
   const normalizedCode = code.trim().toUpperCase();
@@ -574,4 +599,3 @@ export function localizeAirlineLabel(value: string, locale: Locale) {
     .replaceAll("Route fare", copy.routeFare)
     .replaceAll("source fare", copy.sourceFare);
 }
-
