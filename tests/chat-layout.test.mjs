@@ -57,6 +57,7 @@ test("grouped live results expose one inline date and time selector", () => {
   assert.match(routeFinderSource, /const groups = groupFlightResults\(flights\)/);
   assert.match(routeFinderSource, /className="live-variant-picker"/);
   assert.match(routeFinderSource, /type="date"/);
+  assert.match(routeFinderSource, /currentTarget\.showPicker\(\)/);
   assert.match(routeFinderSource, /variantRequest:/);
   assert.match(routeFinderSource, /selectLiveFlightVariant\(route\.id, event\.target\.value\)/);
   assert.match(flightChatSource, /chatResultsTitle\(groupFlightResults\(flights\)\.length\)/);

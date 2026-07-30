@@ -79,7 +79,7 @@ test("persistent cache key excludes the SerpApi secret", async () => {
     "utf8",
   );
   assert.match(source, /canonicalUrl\.searchParams\.delete\("api_key"\)/);
-  assert.match(source, /FLIGHT_SEARCH_CACHE_TTL_MS \|\| 604800000/);
+  assert.match(source, /FLIGHT_SEARCH_CACHE_TTL_MS \|\| 15 \* 60_000/);
   assert.match(source, /readPersistentFlightSearchCache\(cacheKey\)/);
   assert.match(source, /writePersistentFlightSearchCache\(cacheKey, parsed, expiresAt\)/);
 });

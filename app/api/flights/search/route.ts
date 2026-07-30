@@ -110,7 +110,7 @@ export async function POST(request: Request) {
             else if (cabinClass === "first") tc = 4;
             
             url += `&travel_class=${tc}&hl=en&gl=us`;
-            if (includeHidden) url += "&show_hidden=true";
+            if (includeHidden) url += "&show_hidden=true&deep_search=true";
 
             queries.push(url);
           }
@@ -140,9 +140,7 @@ export async function POST(request: Request) {
       }
     }
 
-    let finalResults = Array.from(unique.values())
-      .sort((a, b) => a.price - b.price)
-      .slice(0, 100);
+    let finalResults = limitFlightResults(Array.from(unique.values()));
 
     if (finalResults.length === 0 && allowMockFallback && !apiKey) {
       finalResults = generateMockFlights(legOrigins[0] || "NRT", legDestinations[0] || "LAX", startDate);
@@ -222,6 +220,7 @@ export async function POST(request: Request) {
         false,
         1,
         returnOverride,
+        true,
       );
     }
 
@@ -459,6 +458,18 @@ function limitDates(dates: string[], limit?: number): string[] {
   );
 }
 
+function limitFlightResults(flights: any[], limit = 100) {
+  const sorted = [...flights].sort((a, b) => a.price - b.price);
+  const nonstop = sorted.filter((flight) => flight.stops === 0);
+  if (nonstop.length >= limit) return nonstop.slice(0, limit);
+
+  const connecting = sorted.filter((flight) => flight.stops !== 0);
+  return [
+    ...nonstop,
+    ...connecting.slice(0, limit - nonstop.length),
+  ].sort((a, b) => a.price - b.price);
+}
+
 function combineTwoLegResults(firstLeg: any[], secondLeg: any[]) {
   const combined: any[] = [];
 
@@ -654,7 +665,7 @@ function getSampledDates(startStr: string, endStr: string): string[] {
 async function executeQuery(url: string, onProviderRequest?: () => void) {
   const cacheTtlMilliseconds = Math.max(
     0,
-    Number(process.env.FLIGHT_SEARCH_CACHE_TTL_MS || 604800000),
+    Number(process.env.FLIGHT_SEARCH_CACHE_TTL_MS || 15 * 60_000),
   );
 
   const canonicalUrl = new URL(url);

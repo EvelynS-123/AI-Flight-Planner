@@ -991,6 +991,13 @@ export default function RouteFinder() {
                                   max={variantDateMax}
                                   value={selectedVariantDate}
                                   disabled={variantIsLoading}
+                                  onClick={(event) => {
+                                    try {
+                                      event.currentTarget.showPicker();
+                                    } catch {
+                                      // The browser may already have opened its native date picker.
+                                    }
+                                  }}
                                   onChange={(event) => {
                                     void selectLiveFlightDate(route.id, event.target.value);
                                   }}
