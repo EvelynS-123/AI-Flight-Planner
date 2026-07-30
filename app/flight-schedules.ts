@@ -54,10 +54,6 @@ export type RouteScores = {
   stops: number;
   duration: number;
   convenience: number;
-  attractiveness: number;
-  usableTime: number;
-  airportAccess: number;
-  timeWindow: number;
 };
 
 export type RankedRouteOption = RouteOption & {
@@ -79,6 +75,7 @@ const AIRPORT_OFFSET_MINUTES: Record<string, number> = {
   PVG: 480, PEK: 480, HKG: 480, TPE: 480, CAN: 480, WUH: 480, MNL: 480,
   ICN: 540, NRT: 540, KIX: 540, HNL: -600,
   LAX: -420, SFO: -420, SEA: -420, YVR: -420,
+  LHR: 60, CDG: 120, JFK: -240, DXB: 240, SYD: 600, SIN: 480, BKK: 420, MEL: 600,
 };
 
 const AIRPORT_CITY_MINUTES: Record<string, number> = {
@@ -214,8 +211,8 @@ function parseTime(value: string) {
   return hours * 60 + minutes;
 }
 
-function parseDate(value: string, fallbackMonth: "Aug" | "Sep" = "Sep") {
-  const match = value.match(/^2026-(08|09)-(\d{2})$/);
+function parseDate(value: string, fallbackMonth: string = "Sep") {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) return value;
   return fallbackMonth === "Aug" ? "2026-08-15" : "2026-09-15";
 }
@@ -339,18 +336,59 @@ function makeStop(
 }
 
 function buildSchedule(route: RouteOption, requestedDays: number[] = []) {
-  if (route.liveSchedule) {
-    return {
-      scheduledTickets: route.liveSchedule.scheduledTickets,
-      scheduledStops: route.liveSchedule.scheduledStops,
-      totalDurationMinutes: route.liveSchedule.totalDurationMinutes,
-      selectedStopoverDays: route.liveSchedule.selectedStopoverDays,
-      dataValid: route.liveSchedule.dataValid,
-    };
-  }
   const scheduledTickets: ScheduledTicket[] = [];
-  const scheduledStops: ScheduledStop[] = [];
+  let scheduledStops: ScheduledStop[] = [];
   const selectedStopoverDays: number[] = [];
+
+  if (route.liveFlights && route.liveFlights.length > 0) {
+    const flights: ScheduledFlight[] = route.liveFlights.map(fl => {
+      const depLocal = fl.departure_airport.time;
+      const arrLocal = fl.arrival_airport.time;
+      const depDate = depLocal.split(" ")[0];
+      const depTime = depLocal.split(" ")[1];
+      const arrDate = arrLocal.split(" ")[0];
+      const arrTime = arrLocal.split(" ")[1];
+      
+      const departureUtc = localDateTimeToUtc(depDate, depTime, fl.departure_airport.id);
+      const arrivalUtc = localDateTimeToUtc(arrDate, arrTime, fl.arrival_airport.id);
+
+      return {
+        id: fl.flight_number,
+        from: fl.departure_airport.id,
+        to: fl.arrival_airport.id,
+        airlineCode: fl.flight_number.substring(0, 2),
+        airlineName: fl.airline,
+        flightNumber: fl.flight_number,
+        departureTime: depTime,
+        durationMinutes: fl.duration,
+        operatingDays: [0, 1, 2, 3, 4, 5, 6],
+        scheduleSource: "Google Flights",
+        logoUrl: fl.airline_logo || `https://www.gstatic.com/flights/airline_logos/70px/dark/${fl.flight_number.substring(0, 2)}.png`,
+        departureUtc,
+        arrivalUtc,
+        departureDate: depDate,
+        arrivalDate: arrDate,
+        arrivalTime: arrTime,
+        arrivalDayOffset: Math.round(dateToDayNumber(arrDate) - dateToDayNumber(depDate))
+      };
+    });
+
+    scheduledStops = internalStops(flights);
+
+    scheduledTickets.push({
+      ticketIndex: 0,
+      price: route.total,
+      fareDate: flights[0].departureDate,
+      fareSource: route.segments[0].source,
+      fareUrl: route.segments[0].url,
+      flights,
+    });
+
+    const dataValid = true;
+    const totalDurationMinutes = Math.round((flights[flights.length - 1].arrivalUtc - flights[0].departureUtc) / 60_000);
+    return { scheduledTickets, scheduledStops, totalDurationMinutes, selectedStopoverDays, dataValid };
+  }
+
   let previousArrival = -Infinity;
 
   for (let ticketIndex = 0; ticketIndex < route.segments.length; ticketIndex += 1) {
@@ -470,7 +508,47 @@ export function scoreScheduledRoutes(
   const durationMin = Math.min(...durations);
   const durationMax = Math.max(...durations);
 
-  return scheduled.map(({ route, schedule }) => {
+  const rawInterests = scheduled.map(({ schedule }) => {
+    let rawInterest = Math.random() * 10; // 直行便やペナルティ時のベース (0-10点)
+
+    const isJAL = schedule.scheduledTickets.some(ticket => 
+      ticket.flights.some((f: any) => 
+        f.airlineCode === "JL" || 
+        f.airlineName?.toLowerCase().includes("japan airlines")
+      )
+    );
+    const jalBonus = isJAL ? 300 : 0;
+
+    if (schedule.scheduledStops.length > 0) {
+      let maxBonusScore = -100;
+      for (const stop of schedule.scheduledStops) {
+        const layoverHours = stop.durationMinutes / 60;
+        const stopBaseScore = cityAttractiveness[stop.airport] ?? 50;
+        let layoverMultiplier = 1.0;
+
+        // "実際に外に出れる観光時間 (5-16h)"
+        if (layoverHours >= 5 && layoverHours <= 16) {
+          layoverMultiplier = 5.0; // 特大ボーナスに変更
+        // "短すぎる時間 (<3h)"
+        } else if (layoverHours < 3) {
+          layoverMultiplier = -1.0;
+        }
+
+        const currentStopScore = stopBaseScore * layoverMultiplier;
+        if (currentStopScore > maxBonusScore) {
+          maxBonusScore = currentStopScore;
+        }
+      }
+      rawInterest = maxBonusScore;
+    }
+
+    return rawInterest + jalBonus;
+  });
+
+  const interestMin = Math.min(...rawInterests);
+  const interestMax = Math.max(...rawInterests);
+
+  return scheduled.map(({ route, schedule }, i) => {
     const price = reversedMinMax(route.total, priceMin, priceMax);
     const stops = stopScore(schedule.scheduledStops.length);
     const duration = reversedMinMax(schedule.totalDurationMinutes, durationMin, durationMax);
@@ -481,19 +559,21 @@ export function scoreScheduledRoutes(
     const convenience = Math.max(0, 100 - conveniencePenalty);
     const directness = Math.max(0, Math.min(100, 0.4 * stops + 0.4 * duration + 0.2 * convenience));
 
-    const attractiveness = average(schedule.scheduledStops.map((stop) => cityAttractiveness[stop.airport] ?? 70));
-    const usableTime = average(schedule.scheduledStops.map((stop) => usableTimeScore(stop.usableMinutes)));
-    const airportAccess = average(schedule.scheduledStops.map((stop) => airportAccessScore(stop.airport)));
-    const timeWindow = average(schedule.scheduledStops.map(timeWindowScore));
-    const interest = schedule.scheduledStops.length
-      ? 0.4 * attractiveness + 0.3 * usableTime + 0.2 * airportAccess + 0.1 * timeWindow
-      : 0;
-    const total = (price * weights.price + interest * weights.interest + directness * weights.directness) / 100;
+    // Normalize interest to strict 0-100 scale
+    const interest = interestMax === interestMin ? 100 : 100 * ((rawInterests[i] - interestMin) / (interestMax - interestMin));
+
+    // Exponentially boost the interest weight when the user sets it high, so it dominates the final score
+    const boostedInterestWeight = weights.interest > 20 
+      ? weights.interest * (weights.interest / 15) 
+      : weights.interest;
+
+    const totalWeights = weights.price + boostedInterestWeight + weights.directness;
+    const total = (price * weights.price + interest * boostedInterestWeight + directness * weights.directness) / totalWeights;
 
     return {
       ...route,
       ...schedule,
-      scores: { price, interest, directness, total, stops, duration, convenience, attractiveness, usableTime, airportAccess, timeWindow },
+      scores: { price, interest, directness, total, stops, duration, convenience },
     };
   });
 }
