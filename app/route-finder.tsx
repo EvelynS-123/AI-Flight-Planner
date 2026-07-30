@@ -958,6 +958,8 @@ export default function RouteFinder() {
                 const variantDateMax = typeof liveSearchContext?.dateRangeEnd === "string"
                   ? liveSearchContext.dateRangeEnd
                   : undefined;
+                const hasInternalConnections = route.ticketType === "multi-city"
+                  && route.scheduledStops.some((stop) => stop.kind === "connection");
                 return (
                   <div className="route-motion" key={route.id} ref={(element) => { if (element) cardRefs.current.set(route.id, element); else cardRefs.current.delete(route.id); }}>
                   <article className={`route-card ${isOpen ? "open" : ""}`}>
@@ -966,21 +968,31 @@ export default function RouteFinder() {
                       <div className="route-main">
                         <div className="route-codes">
                           <strong>{route.origin}</strong>
-                          {route.hubs.map((hub, hubIndex) => (
-                            <span className="route-hop" key={`${hub}-${hubIndex}`}>
-                              <Arrow />
-                              <span
-                                className={`hub-code ${route.ticketType === "connection" ? "connection-hub" : "multi-city-hub"}`}
-                                title={`${route.ticketType === "connection" ? copy.connectionHub : copy.multiCityHub} · ${airportCity(hub, locale, route.airportNames?.[hub])}`}
-                              >
-                                {hub}
+                          {route.hubs.map((hub, hubIndex) => {
+                            const indexedStop = route.scheduledStops[hubIndex];
+                            const stopKind = indexedStop?.airport === hub
+                              ? indexedStop.kind
+                              : route.scheduledStops.find((stop) => stop.airport === hub)?.kind;
+                            const isConnectionHub = stopKind === "connection";
+                            return (
+                              <span className="route-hop" key={`${hub}-${hubIndex}`}>
+                                <Arrow />
+                                <span
+                                  className={`hub-code ${isConnectionHub ? "connection-hub" : "multi-city-hub"}`}
+                                  title={`${isConnectionHub ? copy.connectionHub : copy.multiCityHub} · ${airportCity(hub, locale, route.airportNames?.[hub])}`}
+                                >
+                                  {hub}
+                                </span>
                               </span>
-                            </span>
-                          ))}
+                            );
+                          })}
                           <Arrow /><strong>{route.destination}</strong>
                         </div>
                         <div className="route-meta">
                           <span className={`ticket-pill ${route.ticketType}`}>{ticket.label}</span>
+                          {hasInternalConnections && (
+                            <span className="ticket-pill connection">{copy.connection}</span>
+                          )}
                           <span>{ticket.detail}</span>
                           {route.hubs.length > 0 && <span>{copy.via} {route.hubs.map((hub) => airportCity(hub, locale, route.airportNames?.[hub])).join(locale === "en" ? ", " : "、")}</span>}
                           <span>{copy.totalDuration} {localizeDuration(route.totalDurationMinutes, locale)}</span>
@@ -1320,4 +1332,3 @@ export default function RouteFinder() {
     </>
   );
 }
-

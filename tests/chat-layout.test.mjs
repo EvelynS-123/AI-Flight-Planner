@@ -50,6 +50,13 @@ test("variant choices expose sightseeing time and keep the edited route anchored
   assert.match(routeFinderSource, /if \(id === anchoredRouteId\) continue/);
 });
 
+test("mixed multi-city routes distinguish connection hubs and show both labels", () => {
+  assert.match(routeFinderSource, /hasInternalConnections = route\.ticketType === "multi-city"/);
+  assert.match(routeFinderSource, /const isConnectionHub = stopKind === "connection"/);
+  assert.match(routeFinderSource, /isConnectionHub \? "connection-hub" : "multi-city-hub"/);
+  assert.match(routeFinderSource, /className="ticket-pill connection">\{copy\.connection\}/);
+});
+
 test("route exploration stays generalized, diverse, and preference-grounded", () => {
   assert.match(chatApiSource, /match each hub's real travel character to them semantically/);
   assert.match(chatApiSource, /rather than a fixed route table/);
