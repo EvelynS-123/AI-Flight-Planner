@@ -306,9 +306,9 @@ export async function POST(request: Request) {
         const hubReasons = explorationHubReasons && typeof explorationHubReasons === "object"
           ? explorationHubReasons as Record<string, unknown>
           : null;
-        const reason = typeof hubReasons?.[hub] === "string"
-          ? hubReasons[hub]
-          : undefined;
+        const reason = [hub, ...hub.split(",")]
+          .map((code) => hubReasons?.[code])
+          .find((value): value is string => typeof value === "string");
 
         return combineTwoLegResults(firstLeg, secondLeg)
           .filter((flight) => maxStops == null || flight.stops <= maxStops)
@@ -417,9 +417,24 @@ function normalizeExplorationHubs(
   return Array.from(
     new Set(
       value
-        .filter((code): code is string => typeof code === "string")
-        .map((code) => code.trim().toUpperCase())
-        .filter((code) => /^[A-Z]{3}$/.test(code) && !endpoints.has(code)),
+        .flatMap((group) => {
+          if (typeof group !== "string") return [];
+          const codes = Array.from(
+            new Set(
+              group
+                .split(",")
+                .map((code) => code.trim().toUpperCase())
+                .filter(Boolean),
+            ),
+          );
+          if (
+            codes.length === 0
+            || codes.some((code) => !/^[A-Z]{3}$/.test(code) || endpoints.has(code))
+          ) {
+            return [];
+          }
+          return [codes.join(",")];
+        }),
     ),
   ).slice(0, MAX_EXPLORATION_HUBS);
 }
@@ -473,6 +488,10 @@ function combineTwoLegResults(firstLeg: any[], secondLeg: any[]) {
           : "C";
       }
 
+      const transferAirports = f1.destination === f2.origin
+        ? [f1.destination]
+        : [f1.destination, f2.origin];
+
       combined.push({
         id: `${f1.id}-${f2.id}`,
         airline: f1.airline === f2.airline ? f1.airline : "Multiple Airlines",
@@ -486,7 +505,11 @@ function combineTwoLegResults(firstLeg: any[], secondLeg: any[]) {
         arrivalTime: f2.arrivalTime,
         durationMinutes: f1.durationMinutes + f2.durationMinutes + layoverMins,
         stops: f1.stops + f2.stops + 1,
-        stopAirports: [...f1.stopAirports, f1.destination, ...f2.stopAirports],
+        stopAirports: [
+          ...f1.stopAirports,
+          ...transferAirports,
+          ...f2.stopAirports,
+        ],
         price: f1.price + f2.price,
         currency: f1.currency,
         cabinClass: f1.cabinClass,
@@ -719,4 +742,3 @@ async function executeQuery(url: string, onProviderRequest?: () => void) {
     return [];
   }
 }
-

@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { COPY, airportCity, type Copy, type Locale } from "./i18n";
+import {
+  COPY,
+  airportCity,
+  airportMetroGroup,
+  type Copy,
+  type Locale,
+} from "./i18n";
 import type { FlightResult } from "./flight-results";
 import { groupFlightResults } from "./flights/group-results";
 
@@ -13,6 +19,7 @@ type SearchParams = Record<string, unknown> & {
 
 type ExplorationHubOption = {
   code: string;
+  codes: string[];
   city: string;
   reason: string;
 };
@@ -119,6 +126,7 @@ function normalizeHubOptions(params: SearchParams): ExplorationHubOption[] {
     seen.add(code);
     return [{
       code,
+      codes: [code],
       city: typeof value.city === "string" && value.city.trim()
         ? value.city.trim()
         : code,
@@ -151,6 +159,7 @@ function verifiedHubOptions(
       const city = airportCity(code, locale, flight.airportNames?.[code]);
       options.push({
         code,
+        codes: [code],
         city,
         reason: creative?.reason || hubCharacter(city, locale),
       });
@@ -163,6 +172,38 @@ function verifiedHubOptions(
       const rightSuggested = suggestionByCode.has(right.code) ? 1 : 0;
       return rightSuggested - leftSuggested;
     });
+}
+
+function groupHubOptionsByCity(
+  options: ExplorationHubOption[],
+): ExplorationHubOption[] {
+  const grouped = new Map<string, ExplorationHubOption>();
+
+  for (const option of options) {
+    const metro = airportMetroGroup(option.code);
+    const cityKey = metro.cityCode;
+    const existing = grouped.get(cityKey);
+    if (!existing) {
+      grouped.set(cityKey, {
+        ...option,
+        code: metro.airports.join(","),
+        codes: metro.airports,
+      });
+      continue;
+    }
+
+    const codes = Array.from(
+      new Set([...existing.codes, ...metro.airports, ...option.codes]),
+    );
+    grouped.set(cityKey, {
+      ...existing,
+      code: codes.join(","),
+      codes,
+      reason: existing.reason || option.reason,
+    });
+  }
+
+  return Array.from(grouped.values());
 }
 
 export function FlightChat({
@@ -291,7 +332,7 @@ export function FlightChat({
           const options = discovery.flights
             ? verifiedHubOptions(data.params, discovery.flights, locale)
             : [];
-          setHubOptions(await describeHubs(options));
+          setHubOptions(groupHubOptionsByCity(await describeHubs(options)));
         }
         setSelectedHubs([]);
         setPhase("ready");
@@ -446,7 +487,7 @@ export function FlightChat({
                     >
                       <span>
                         <strong>{option.city}</strong>
-                        <i>{option.code}</i>
+                        <i>{option.codes.join(" / ")}</i>
                       </span>
                       {option.reason && <small>{option.reason}</small>}
                     </button>

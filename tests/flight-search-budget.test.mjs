@@ -4,8 +4,8 @@ import { POST } from "../app/api/flights/search/route.ts";
 
 function serpPayload(urlString) {
   const url = new URL(urlString);
-  const origin = url.searchParams.get("departure_id");
-  const destination = url.searchParams.get("arrival_id");
+  const origin = url.searchParams.get("departure_id").split(",")[0];
+  const destination = url.searchParams.get("arrival_id").split(",")[0];
   const date = url.searchParams.get("outbound_date");
 
   return {
@@ -119,6 +119,53 @@ test("initial search uses one regular request plus two per selected hub", async 
     assert.equal(calls.length - multiCallsBefore, 2);
     assert.equal(multiVariantData.meta.providerRequests, 2);
     assert.ok(multiVariantData.results.every((flight) => flight.isSelfTransfer));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.SERPAPI_API_KEY;
+    else process.env.SERPAPI_API_KEY = originalApiKey;
+  }
+});
+
+test("one selected multi-airport city still uses two exploration requests", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.SERPAPI_API_KEY;
+  const calls = [];
+  process.env.SERPAPI_API_KEY = "metro-budget-test-key";
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return Response.json(serpPayload(String(url)));
+  };
+
+  try {
+    const response = await POST(new Request("http://local/api/flights/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        legs: [{ origins: ["CDG"], destinations: ["BKK"] }],
+        dateRangeStart: "2026-10-03",
+        dateRangeEnd: "2026-10-03",
+        tripType: "one_way",
+        cabinClass: "economy",
+        adults: 1,
+        explorationHubs: ["HND,NRT"],
+      }),
+    }));
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(calls.length, 3);
+    assert.equal(data.meta.providerRequests, 3);
+    assert.equal(
+      new URL(calls[1]).searchParams.get("arrival_id"),
+      "HND,NRT",
+    );
+    assert.equal(
+      new URL(calls[2]).searchParams.get("departure_id"),
+      "HND,NRT",
+    );
+    assert.ok(data.results.some((flight) =>
+      flight.explorationHub === "HND,NRT"
+    ));
   } finally {
     globalThis.fetch = originalFetch;
     if (originalApiKey === undefined) delete process.env.SERPAPI_API_KEY;

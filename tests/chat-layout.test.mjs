@@ -73,6 +73,8 @@ test("users explicitly limit stopover exploration before search", () => {
   assert.match(flightChatSource, /explorationHubs: selectedHubs/);
   assert.match(flightChatSource, /1 \+ count \* 2/);
   assert.match(flightSearchApiSource, /MAX_PROVIDER_REQUESTS = 1 \+ MAX_EXPLORATION_HUBS \* 2/);
+  assert.match(flightChatSource, /option\.codes\.join\(" \/ "\)/);
+  assert.match(flightSearchApiSource, /\.split\(","\)/);
 });
 
 test("stopover choices are extracted from one verified regular search", () => {

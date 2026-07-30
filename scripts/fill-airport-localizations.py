@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from argostranslate import translate
+from opencc import OpenCC
 
 
 ROOT = Path(__file__).parents[1]
@@ -38,6 +39,30 @@ MANUAL_OVERRIDES = {
         "zh": "海口",
         "ko": "하이커우",
         "ja": "海口",
+    },
+    "DPS": {
+        "en": "Denpasar-Bali Island",
+        "zh": "登巴萨",
+        "ko": "덴파사르",
+        "ja": "デンパサール",
+    },
+    "HND": {
+        "en": "Tokyo",
+        "zh": "东京",
+        "ko": "도쿄",
+        "ja": "東京",
+    },
+    "NRT": {
+        "en": "Tokyo",
+        "zh": "东京",
+        "ko": "도쿄",
+        "ja": "東京",
+    },
+    "TPE": {
+        "en": "Taipei",
+        "zh": "台北",
+        "ko": "타이베이",
+        "ja": "台北",
     },
 }
 
@@ -83,6 +108,10 @@ for names in localizations.values():
         value = names[language]
         if value.endswith(suffix) and len(value) > len(suffix) + 1:
             names[language] = value[: -len(suffix)].strip()
+
+chinese_converter = OpenCC("t2s")
+for names in localizations.values():
+    names["zh"] = chinese_converter.convert(names["zh"])
 
 for code, names in MANUAL_OVERRIDES.items():
     if code in localizations:

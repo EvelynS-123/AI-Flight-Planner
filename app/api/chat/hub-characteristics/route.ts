@@ -1,5 +1,6 @@
 import { createTravelAIProvider } from "../../../ai-travel/providers.ts";
 import localizedAirportNames from "../../../data/airport-localized-names.json" with { type: "json" };
+import { airportCity } from "../../../i18n.ts";
 
 export const runtime = "nodejs";
 
@@ -38,16 +39,24 @@ export async function POST(request: Request) {
     : "en";
   const hubs = normalizeHubs(rawHubs).map((hub) => ({
     ...hub,
-    city: LOCALIZED_AIRPORT_NAMES[hub.code]?.en || hub.city,
+    city: airportCity(
+      hub.code,
+      "en",
+      LOCALIZED_AIRPORT_NAMES[hub.code]?.en || hub.city,
+    ),
   }));
   if (hubs.length === 0) return Response.json({ hubs: {} });
 
   const provider = createTravelAIProvider();
   const fallbackDetails = Object.fromEntries(
     hubs.map((hub) => [hub.code, {
-      city: LOCALIZED_AIRPORT_NAMES[hub.code]?.[supportedLocale]
-        || LOCALIZED_AIRPORT_NAMES[hub.code]?.en
-        || hub.city,
+      city: airportCity(
+        hub.code,
+        supportedLocale,
+        LOCALIZED_AIRPORT_NAMES[hub.code]?.[supportedLocale]
+          || LOCALIZED_AIRPORT_NAMES[hub.code]?.en
+          || hub.city,
+      ),
       reason: "",
     }]),
   );

@@ -1,4 +1,5 @@
 import localizedAirportNames from "./data/airport-localized-names.json" with { type: "json" };
+import airportMetroGroups from "./data/airport-metro-groups.json" with { type: "json" };
 
 export const LOCALE_OPTIONS = [
   { code: "zh", label: "简中", htmlLang: "zh-CN", intl: "zh-CN" },
@@ -554,6 +555,15 @@ const LOCALIZED_AIRPORT_NAMES = localizedAirportNames as Record<
   string,
   Partial<Record<Locale, string>>
 >;
+const AIRPORT_METRO_GROUPS = airportMetroGroups as Record<
+  string,
+  { name: string; airports: string[] }
+>;
+const AIRPORT_METRO_BY_AIRPORT = Object.fromEntries(
+  Object.entries(AIRPORT_METRO_GROUPS).flatMap(([cityCode, group]) =>
+    group.airports.map((airport) => [airport, { cityCode, ...group }]),
+  ),
+) as Record<string, { cityCode: string; name: string; airports: string[] }>;
 
 export const AIRPORT_CITIES = Object.fromEntries(
   LOCALE_OPTIONS.map(({ code: locale }) => {
@@ -581,6 +591,15 @@ export function airportCity(code: string, locale: Locale, providerName?: string)
   return liveName && liveName.toUpperCase() !== normalizedCode
     ? liveName
     : normalizedCode;
+}
+
+export function airportMetroGroup(code: string) {
+  const normalizedCode = code.trim().toUpperCase();
+  return AIRPORT_METRO_BY_AIRPORT[normalizedCode] || {
+    cityCode: normalizedCode,
+    name: normalizedCode,
+    airports: [normalizedCode],
+  };
 }
 
 export function localizeDateLabel(value: string, locale: Locale) {
