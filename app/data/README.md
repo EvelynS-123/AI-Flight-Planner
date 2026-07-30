@@ -9,4 +9,20 @@ the `mborsetti/airportsdata` airport database:
 - Included rows: entries with a three-letter IATA code and a non-empty served city
 - Stored shape: `{ "IATA": "city" }`
 
-The table supplies a stable city name before the existing batched AI call localizes it and writes the city-character description. It is not used to invent or verify flight availability.
+The table supplies the stable English served-city name used by the localization
+generator. It is not used to invent or verify flight availability.
+
+`airport-localized-names.json` contains complete display names for the same 7,066
+IATA entries in English, Simplified Chinese, Korean, and Japanese:
+
+- Structured localized labels: Wikidata Query Service, CC0
+- Missing-label fallback: Argos Translate offline models, MIT
+- Product display overrides: a small set of reviewed metropolitan-area names
+- Stored shape: `{ "IATA": { "en": "...", "zh": "...", "ko": "...", "ja": "..." } }`
+
+Run `scripts/generate-airport-localizations.py` to rebuild the structured labels,
+then install the `argostranslate` Python package and its models with
+`scripts/install-airport-translation-models.py` and run
+`scripts/fill-airport-localizations.py`. The generated table is read directly at
+runtime. AI writes only the city-character description and cannot replace the
+stored city name.

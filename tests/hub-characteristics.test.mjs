@@ -1,6 +1,30 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { POST } from "../app/api/chat/hub-characteristics/route.ts";
+
+test("localized airport table covers every served-city entry", async () => {
+  const [cities, localizations] = await Promise.all([
+    readFile(new URL("../app/data/airport-cities.json", import.meta.url), "utf8")
+      .then(JSON.parse),
+    readFile(
+      new URL("../app/data/airport-localized-names.json", import.meta.url),
+      "utf8",
+    ).then(JSON.parse),
+  ]);
+
+  assert.equal(Object.keys(localizations).length, 7066);
+  assert.deepEqual(Object.keys(localizations), Object.keys(cities));
+  for (const [code, names] of Object.entries(localizations)) {
+    for (const locale of ["en", "zh", "ko", "ja"]) {
+      assert.equal(
+        typeof names[locale] === "string" && names[locale].trim().length > 0,
+        true,
+        `${code} is missing ${locale}`,
+      );
+    }
+  }
+});
 
 test("hub descriptions localize a live airport name to its city", async () => {
   const originalFetch = globalThis.fetch;
@@ -50,7 +74,7 @@ test("hub descriptions localize a live airport name to its city", async () => {
   }
 });
 
-test("airport table supplies city names before AI localization", async () => {
+test("airport table supplies fixed city names while AI writes descriptions", async () => {
   const originalFetch = globalThis.fetch;
   const originalProvider = process.env.TRAVEL_AI_PROVIDER;
   const originalKey = process.env.GLM_API_KEY;
@@ -93,7 +117,7 @@ test("airport table supplies city names before AI localization", async () => {
     const data = await response.json();
 
     assert.deepEqual(receivedHubs, [
-      { code: "BAH", city: "Manama" },
+      { code: "BAH", city: "Bahrain" },
       { code: "SHJ", city: "Sharjah" },
       { code: "KUL", city: "Kuala Lumpur" },
       { code: "CPH", city: "Copenhagen" },

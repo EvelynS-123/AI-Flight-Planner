@@ -1,7 +1,5 @@
 import { createTravelAIProvider } from "../../../ai-travel/providers.ts";
-import airportCities from "../../../data/airport-cities.json" with { type: "json" };
 import localizedAirportNames from "../../../data/airport-localized-names.json" with { type: "json" };
-import { AIRPORT_CITIES, type Locale } from "../../../i18n.ts";
 
 export const runtime = "nodejs";
 
@@ -10,10 +8,11 @@ type HubInput = {
   city: string;
 };
 
-const AIRPORT_CITY_BY_IATA = airportCities as Record<string, string>;
+type SupportedLocale = "en" | "zh" | "ko" | "ja";
+
 const LOCALIZED_AIRPORT_NAMES = localizedAirportNames as Record<
   string,
-  Partial<Record<"en" | "zh" | "ko" | "ja", string>>
+  Record<SupportedLocale, string>
 >;
 
 function normalizeHubs(value: unknown): HubInput[] {
@@ -34,12 +33,12 @@ function normalizeHubs(value: unknown): HubInput[] {
 
 export async function POST(request: Request) {
   const { hubs: rawHubs, locale, preferenceContext } = await request.json();
-  const supportedLocale: Locale = locale === "zh" || locale === "ko" || locale === "ja"
+  const supportedLocale: SupportedLocale = locale === "zh" || locale === "ko" || locale === "ja"
     ? locale
     : "en";
   const hubs = normalizeHubs(rawHubs).map((hub) => ({
     ...hub,
-    city: AIRPORT_CITY_BY_IATA[hub.code] || hub.city,
+    city: LOCALIZED_AIRPORT_NAMES[hub.code]?.en || hub.city,
   }));
   if (hubs.length === 0) return Response.json({ hubs: {} });
 
@@ -47,7 +46,7 @@ export async function POST(request: Request) {
   const fallbackDetails = Object.fromEntries(
     hubs.map((hub) => [hub.code, {
       city: LOCALIZED_AIRPORT_NAMES[hub.code]?.[supportedLocale]
-        || AIRPORT_CITIES[supportedLocale][hub.code]
+        || LOCALIZED_AIRPORT_NAMES[hub.code]?.en
         || hub.city,
       reason: "",
     }]),
@@ -69,9 +68,8 @@ export async function POST(request: Request) {
     const result = await provider.generateJson({
       purpose: "query-discovery",
       systemPrompt: `Describe the real travel character of a supplied list of verified flight-connection cities.
-Return only a JSON object shaped as {"hubs":[{"code":"IATA","city":"localized city name","reason":"concise description"}]}.
+Return only a JSON object shaped as {"hubs":[{"code":"IATA","reason":"concise description"}]}.
 Keep every supplied IATA code exactly once and do not add or remove cities.
-The city field must contain only the city or metropolitan-area name in ${language}, never an airport name.
 Write each description in ${language}, using roughly 8–18 words.
 Mention distinctive food, culture, urban life, nature, history, or scenery. Do not mention route verification, flights, airports, or generic praise.
 When preferences are supplied, emphasize genuinely matching city characteristics without inventing facts.`,
@@ -86,15 +84,10 @@ When preferences are supplied, emphasize genuinely matching city characteristics
       const code = typeof value.code === "string"
         ? value.code.trim().toUpperCase()
         : "";
-      const city = typeof value.city === "string" ? value.city.trim() : "";
       const reason = typeof value.reason === "string" ? value.reason.trim() : "";
-      if (!allowedCodes.has(code) || !city || !reason) continue;
+      if (!allowedCodes.has(code) || !reason) continue;
       details[code] = {
-        city: (
-          LOCALIZED_AIRPORT_NAMES[code]?.[supportedLocale]
-          || AIRPORT_CITIES[supportedLocale][code]
-          || city
-        ).slice(0, 80),
+        city: fallbackDetails[code].city.slice(0, 80),
         reason: reason.slice(0, 120),
       };
     }
