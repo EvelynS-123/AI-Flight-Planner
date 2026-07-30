@@ -32,8 +32,20 @@ test("preference chatbot replaces numeric quiz without removing manual route wei
   assert.match(routeFinderSource, /className=\{`weight-panel/);
   assert.match(preferenceChatSource, /\/api\/preferences\/chat/);
   assert.match(preferenceChatSource, /readyToSave/);
+  assert.match(preferenceChatSource, /你平时最喜欢做什么/);
   assert.match(preferenceChatApiSource, /Ask exactly one short, useful question per turn/);
-  assert.match(preferenceChatApiSource, /Distinguish soft preferences from explicit hard constraints/);
+  assert.match(preferenceChatApiSource, /Interview naturally instead of walking through a questionnaire/);
+  assert.match(preferenceChatApiSource, /Do not default to binary or multiple-choice questions/);
+  assert.match(preferenceChatApiSource, /Preprocess the conversation into concise, durable preference facts/);
+});
+
+test("route details keep only three scores and reveal component weights on hover or focus", () => {
+  assert.doesNotMatch(routeFinderSource, /copy\.whyHere|copy\.scoreNote/);
+  assert.equal((routeFinderSource.match(/<ScoreDetail/g) || []).length, 3);
+  assert.match(routeFinderSource, /interestComponents/);
+  assert.match(routeFinderSource, /directnessComponents/);
+  assert.match(globalCssSource, /\.score-detail:hover \.score-tooltip/);
+  assert.match(globalCssSource, /\.score-detail:focus-visible \.score-tooltip/);
 });
 
 test("chat component remains mounted while its interface is collapsed", () => {

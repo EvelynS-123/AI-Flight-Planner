@@ -22,6 +22,12 @@ import {
   maxUsableStopoverMinutesForFlight,
   type FlightResultGroup,
 } from "./flights/group-results";
+import {
+  applyPreferenceEvaluations,
+  preferenceCandidateForRoute,
+  type RoutePreferenceEvaluation,
+  type ScoreComponent,
+} from "./preference-evaluation";
 
 type LiveSearchContext = Record<string, unknown>;
 
@@ -69,8 +75,8 @@ function liveFlightPickerCopy(locale: Locale) {
 
 import {
   LEGACY_PREFERENCE_STORAGE_KEY,
+  ORIGINAL_PREFERENCE_STORAGE_KEY,
   PREFERENCE_STORAGE_KEY,
-  buildPersonalizedAttractiveness,
   defaultTravelPreferences,
   sanitizeTravelPreferences,
   type TravelPreferenceState,
@@ -184,6 +190,90 @@ function localizeWeekdays(days: readonly number[], locale: Locale) {
     .join(locale === "en" ? ", " : "、");
 }
 
+function scoreDetailCopy(locale: Locale) {
+  if (locale === "zh") return {
+    breakdown: "得分构成",
+    overallWeight: "总权重",
+    score: "得分",
+    weight: "权重",
+    price: "相对价格",
+    priceReason: "根据当前候选航线中的价格位置计算",
+    interest: "AI 偏好匹配",
+    directness: "AI 直接度匹配",
+  };
+  if (locale === "ko") return {
+    breakdown: "점수 구성",
+    overallWeight: "전체 가중치",
+    score: "점수",
+    weight: "가중치",
+    price: "상대 가격",
+    priceReason: "현재 후보 항공편의 가격 범위에서 계산",
+    interest: "AI 취향 일치",
+    directness: "AI 직행성 일치",
+  };
+  if (locale === "ja") return {
+    breakdown: "スコア内訳",
+    overallWeight: "全体の重み",
+    score: "スコア",
+    weight: "重み",
+    price: "相対価格",
+    priceReason: "現在の候補ルート内での価格位置から計算",
+    interest: "AI 好み一致度",
+    directness: "AI 直行性一致度",
+  };
+  return {
+    breakdown: "Score breakdown",
+    overallWeight: "Overall weight",
+    score: "Score",
+    weight: "Weight",
+    price: "Relative price",
+    priceReason: "Calculated from its price position among the current routes",
+    interest: "AI preference match",
+    directness: "AI directness match",
+  };
+}
+
+function ScoreDetail({
+  label,
+  total,
+  overallWeight,
+  components,
+  locale,
+  tooltipId,
+}: {
+  label: string;
+  total: number;
+  overallWeight: number;
+  components: ScoreComponent[];
+  locale: Locale;
+  tooltipId: string;
+}) {
+  const detailCopy = scoreDetailCopy(locale);
+  return (
+    <div className="score-detail" tabIndex={0} aria-describedby={tooltipId}>
+      <span className="score-pill">{label}<strong>{Math.round(total)}</strong></span>
+      <div className="score-tooltip" id={tooltipId} role="tooltip">
+        <div className="score-tooltip-heading">
+          <strong>{detailCopy.breakdown}</strong>
+          <span>{detailCopy.overallWeight} {overallWeight}%</span>
+        </div>
+        <div className="score-component-list">
+          {components.map((component, index) => (
+            <div className="score-component" key={`${component.label}-${index}`}>
+              <span>{component.label}</span>
+              <div>
+                <strong>{detailCopy.score} {Math.round(component.score)}</strong>
+                <small>{detailCopy.weight} {Math.round(component.weight)}%</small>
+              </div>
+              {component.reason && <p>{component.reason}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function RouteFinder() {
   const [locale, setLocale] = useState<Locale>("zh");
   const [origin, setOrigin] = useState<AirportCode>("PVG");
@@ -192,6 +282,7 @@ export default function RouteFinder() {
   const [weights, setWeights] = useState<RouteWeights>({ price: 30, interest: 35, directness: 35 });
   const [stopoverSelections, setStopoverSelections] = useState<StopoverSelections>({});
   const [travelPreferences, setTravelPreferences] = useState<TravelPreferenceState | null>(null);
+  const [preferenceEvaluations, setPreferenceEvaluations] = useState<RoutePreferenceEvaluation[] | null>(null);
   const [quizOpen, setQuizOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [closingRouteId, setClosingRouteId] = useState<string | null>(null);
@@ -230,11 +321,6 @@ export default function RouteFinder() {
   const copy = COPY[locale];
   const localeOption = LOCALE_OPTIONS.find((item) => item.code === locale)!;
 
-  const personalizedAttractiveness = useMemo(
-    () => travelPreferences?.mode === "personalized" ? buildPersonalizedAttractiveness(travelPreferences) : undefined,
-    [travelPreferences],
-  );
-
   const liveFlights = useMemo(
     () => liveFlightGroups
       ? mapLiveFlightGroupsToRouteOptions(liveFlightGroups, selectedLiveFlightIds)
@@ -255,21 +341,65 @@ export default function RouteFinder() {
     return names;
   }, [liveFlightGroups]);
 
-  const results = useMemo(() => {
+  const baseResults = useMemo(() => {
     const matched = liveFlights || ROUTES.filter((route) => route.origin === origin && route.destination === destination && route.months.includes(month));
-    const scored = scoreRoutes(
+    return scoreRoutes(
       matched,
       weights,
       stopoverSelections,
-      personalizedAttractiveness,
-      travelPreferences ?? undefined,
+      undefined,
+      undefined,
+    );
+  }, [liveFlights, origin, destination, month, weights, stopoverSelections]);
+
+  const preferenceCandidateSignature = useMemo(
+    () => JSON.stringify(baseResults.map(preferenceCandidateForRoute)),
+    [baseResults],
+  );
+
+  useEffect(() => {
+    const personalized = travelPreferences?.mode === "personalized"
+      && travelPreferences.facts.length > 0;
+    if (!personalized || preferenceCandidateSignature === "[]") {
+      setPreferenceEvaluations(null);
+      return;
+    }
+    const controller = new AbortController();
+    setPreferenceEvaluations(null);
+    void fetch("/api/preferences/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        memory: travelPreferences,
+        candidates: JSON.parse(preferenceCandidateSignature),
+        locale,
+      }),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("preference_evaluation_failed");
+      const data = await response.json() as { evaluations?: RoutePreferenceEvaluation[] };
+      if (!controller.signal.aborted) {
+        setPreferenceEvaluations(Array.isArray(data.evaluations) ? data.evaluations : null);
+      }
+    }).catch(() => {
+      if (!controller.signal.aborted) setPreferenceEvaluations(null);
+    });
+    return () => controller.abort();
+  }, [preferenceCandidateSignature, travelPreferences, locale]);
+
+  const results = useMemo(() => {
+    const scored = applyPreferenceEvaluations(
+      baseResults,
+      weights,
+      preferenceEvaluations,
+      travelPreferences?.mode === "personalized",
     );
     if (isDraggingWeights && dragOrder.current) {
       const positions = new Map(dragOrder.current.map((id, index) => [id, index]));
       return scored.sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
     }
     return scored.sort((a, b) => b.scores.total - a.scores.total || (a.total ?? Number.MAX_SAFE_INTEGER) - (b.total ?? Number.MAX_SAFE_INTEGER));
-  }, [liveFlights, origin, destination, month, weights, stopoverSelections, personalizedAttractiveness, travelPreferences, isDraggingWeights]);
+  }, [baseResults, weights, preferenceEvaluations, travelPreferences?.mode, isDraggingWeights]);
 
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
@@ -410,7 +540,8 @@ export default function RouteFinder() {
     let stored: TravelPreferenceState | null = null;
     try {
       const raw = localStorage.getItem(PREFERENCE_STORAGE_KEY)
-        ?? localStorage.getItem(LEGACY_PREFERENCE_STORAGE_KEY);
+        ?? localStorage.getItem(LEGACY_PREFERENCE_STORAGE_KEY)
+        ?? localStorage.getItem(ORIGINAL_PREFERENCE_STORAGE_KEY);
       stored = sanitizeTravelPreferences(JSON.parse(raw ?? "null"));
     } catch {
       stored = null;
@@ -910,6 +1041,29 @@ export default function RouteFinder() {
                   : undefined;
                 const hasInternalConnections = route.ticketType === "multi-city"
                   && route.scheduledStops.some((stop) => stop.kind === "connection");
+                const detailCopy = scoreDetailCopy(locale);
+                const priceComponents: ScoreComponent[] = [{
+                  label: detailCopy.price,
+                  score: route.scores.price,
+                  weight: 100,
+                  reason: detailCopy.priceReason,
+                }];
+                const interestComponents = route.preferenceEvaluation?.interestComponents.length
+                  ? route.preferenceEvaluation.interestComponents
+                  : [{
+                    label: detailCopy.interest,
+                    score: route.scores.interest,
+                    weight: 100,
+                    reason: route.preferenceEvaluation?.explanation ?? "",
+                  }];
+                const directnessComponents = route.preferenceEvaluation?.directnessComponents.length
+                  ? route.preferenceEvaluation.directnessComponents
+                  : [{
+                    label: detailCopy.directness,
+                    score: route.scores.directness,
+                    weight: 100,
+                    reason: route.preferenceEvaluation?.explanation ?? "",
+                  }];
                 return (
                   <div className="route-motion" key={route.id} ref={(element) => { if (element) cardRefs.current.set(route.id, element); else cardRefs.current.delete(route.id); }}>
                   <article className={`route-card ${isOpen ? "open" : ""}`}>
@@ -1137,16 +1291,31 @@ export default function RouteFinder() {
                             </section>
                           ))}
                         </div>
-                        <div className="score-note">
-                          <strong>{copy.whyHere}</strong>
-                          <div>
-                            <p>{copy.scoreNote(weights.price, weights.interest, weights.directness)}</p>
-                            <div className="score-breakdown">
-                              <span>{copy.cheapest}<strong>{Math.round(route.scores.price)}</strong></span>
-                              <span>{copy.interesting}<strong>{Math.round(route.scores.interest)}</strong></span>
-                              <span>{copy.directest}<strong>{Math.round(route.scores.directness)}</strong></span>
-                            </div>
-                          </div>
+                        <div className="score-breakdown">
+                          <ScoreDetail
+                            label={copy.cheapest}
+                            total={route.scores.price}
+                            overallWeight={weights.price}
+                            components={priceComponents}
+                            locale={locale}
+                            tooltipId={`${route.id}-price-breakdown`}
+                          />
+                          <ScoreDetail
+                            label={copy.interesting}
+                            total={route.scores.interest}
+                            overallWeight={weights.interest}
+                            components={interestComponents}
+                            locale={locale}
+                            tooltipId={`${route.id}-interest-breakdown`}
+                          />
+                          <ScoreDetail
+                            label={copy.directest}
+                            total={route.scores.directness}
+                            overallWeight={weights.directness}
+                            components={directnessComponents}
+                            locale={locale}
+                            tooltipId={`${route.id}-directness-breakdown`}
+                          />
                         </div>
                       </div>}
                     </div>

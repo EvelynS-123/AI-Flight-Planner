@@ -34,6 +34,27 @@ export type WeightedTextPreference = {
   strength: number;
 };
 
+export const PREFERENCE_FACT_SCOPES = [
+  "destination-experience",
+  "airline",
+  "schedule",
+  "connection",
+  "comfort",
+  "other",
+] as const;
+
+export type PreferenceFactScope = (typeof PREFERENCE_FACT_SCOPES)[number];
+
+export type PreferenceFact = {
+  statement: string;
+  scope: PreferenceFactScope;
+  axis: "interest" | "directness";
+  polarity: "like" | "dislike" | "require" | "avoid";
+  strength: number;
+  hardConstraint: boolean;
+  evidence: string;
+};
+
 export type PreferenceTimeWindow = {
   startHour: number;
   endHour: number;
@@ -53,8 +74,9 @@ export type TravelHardConstraints = {
 };
 
 export type TravelPreferenceState = {
-  version: 2;
+  version: 3;
   mode: "default" | "personalized";
+  facts: PreferenceFact[];
   categories: PreferenceLevels;
   favoriteCities: string[];
   summary: string;
@@ -76,8 +98,9 @@ export type TravelPreferenceState = {
   updatedAt: string;
 };
 
-export const PREFERENCE_STORAGE_KEY = "via.travel-memory.v2";
-export const LEGACY_PREFERENCE_STORAGE_KEY = "via.travel-preferences.v1";
+export const PREFERENCE_STORAGE_KEY = "via.travel-memory.v3";
+export const LEGACY_PREFERENCE_STORAGE_KEY = "via.travel-memory.v2";
+export const ORIGINAL_PREFERENCE_STORAGE_KEY = "via.travel-preferences.v1";
 export const FAVORITE_CITY_LIMIT = 3;
 export const DEFAULT_PREFERENCE_LEVELS: PreferenceLevels = {
   food: 3,
@@ -205,6 +228,37 @@ function sanitizeWeightedTextPreferences(value: unknown): WeightedTextPreference
   return [...byValue.values()];
 }
 
+function sanitizePreferenceFacts(value: unknown): PreferenceFact[] {
+  if (!Array.isArray(value)) return [];
+  const validScopes = new Set<string>(PREFERENCE_FACT_SCOPES);
+  const byStatement = new Map<string, PreferenceFact>();
+  for (const item of value.slice(0, 32)) {
+    if (!item || typeof item !== "object") continue;
+    const candidate = item as Partial<PreferenceFact>;
+    const statement = cleanText(candidate.statement, 240);
+    if (!statement) continue;
+    const scope = validScopes.has(String(candidate.scope))
+      ? candidate.scope as PreferenceFactScope
+      : "other";
+    const axis = candidate.axis === "directness" ? "directness" : "interest";
+    const polarity = candidate.polarity === "dislike"
+      || candidate.polarity === "require"
+      || candidate.polarity === "avoid"
+      ? candidate.polarity
+      : "like";
+    byStatement.set(`${axis}:${statement.toLocaleLowerCase()}`, {
+      statement,
+      scope,
+      axis,
+      polarity,
+      strength: clampLevel(candidate.strength),
+      hardConstraint: candidate.hardConstraint === true,
+      evidence: cleanText(candidate.evidence, 240),
+    });
+  }
+  return [...byStatement.values()];
+}
+
 function sanitizeTimeWindows(value: unknown): PreferenceTimeWindow[] {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 4).flatMap((item) => {
@@ -248,8 +302,9 @@ function defaultHardConstraints(): TravelHardConstraints {
 
 export function defaultTravelPreferences(): TravelPreferenceState {
   return {
-    version: 2,
+    version: 3,
     mode: "default",
+    facts: [],
     categories: { ...DEFAULT_PREFERENCE_LEVELS },
     favoriteCities: [],
     summary: "",
@@ -271,7 +326,7 @@ export function defaultTravelPreferences(): TravelPreferenceState {
 export function sanitizeTravelPreferences(value: unknown): TravelPreferenceState | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
-  if (candidate.version !== 1 && candidate.version !== 2) return null;
+  if (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== 3) return null;
   if (candidate.mode !== "default" && candidate.mode !== "personalized") return null;
 
   const fallback = defaultTravelPreferences();
@@ -313,8 +368,9 @@ export function sanitizeTravelPreferences(value: unknown): TravelPreferenceState
     : null;
 
   return {
-    version: 2,
+    version: 3,
     mode: candidate.mode,
+    facts: sanitizePreferenceFacts(candidate.facts),
     categories,
     favoriteCities,
     summary: cleanText(candidate.summary, 600),
@@ -353,7 +409,7 @@ export function personalizedTravelPreferences(
 ): TravelPreferenceState {
   return sanitizeTravelPreferences({
     ...defaultTravelPreferences(),
-    version: 2,
+    version: 3,
     mode: "personalized",
     categories,
     favoriteCities,

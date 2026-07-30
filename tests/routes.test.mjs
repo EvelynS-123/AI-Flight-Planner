@@ -36,6 +36,7 @@ import {
 } from "../app/ai-travel/search.ts";
 import { checkTravelRevision } from "../app/ai-travel/security.ts";
 import { ROUTES, moveWeightBoundary, scoreRoutes } from "../app/route-data.ts";
+import { applyPreferenceEvaluations } from "../app/preference-evaluation.ts";
 import {
   DEFAULT_CITY_ATTRACTIVENESS,
   FAVORITE_CITY_LIMIT,
@@ -592,7 +593,7 @@ test("preference memory migrates v1 data and sanitizes detailed v2 fields", () =
     categories: { food: 5, culture: 2, nature: 1, urban: 4 },
     favoriteCities: ["TPE"],
   });
-  assert.equal(migrated.version, 2);
+  assert.equal(migrated.version, 3);
   assert.equal(migrated.categories.food, 5);
   assert.deepEqual(migrated.favoriteCities, ["TPE"]);
 
@@ -600,6 +601,15 @@ test("preference memory migrates v1 data and sanitizes detailed v2 fields", () =
     ...defaultTravelPreferences(),
     version: 2,
     mode: "personalized",
+    facts: [{
+      statement: "The user especially enjoys skiing.",
+      scope: "destination-experience",
+      axis: "interest",
+      polarity: "like",
+      strength: 9,
+      hardConstraint: false,
+      evidence: "Skiing is a favorite hobby.",
+    }],
     interests: [
       { tag: "street-food", strength: 5 },
       { tag: "not-a-real-tag", strength: 5 },
@@ -613,6 +623,8 @@ test("preference memory migrates v1 data and sanitizes detailed v2 fields", () =
     },
   });
   assert.deepEqual(detailed.interests, [{ tag: "street-food", strength: 5 }]);
+  assert.equal(detailed.facts[0].statement, "The user especially enjoys skiing.");
+  assert.equal(detailed.facts[0].strength, 5);
   assert.deepEqual(detailed.departureWindows, [{ startHour: 22, endHour: 4, strength: 5 }]);
   assert.equal(detailed.hardConstraints.avoidOvernight, true);
   assert.equal(detailed.hardConstraints.maxStops, 1);
@@ -674,6 +686,42 @@ test("time and comfort affect directness while airlines affect interest", () => 
   assert.equal(direct.scores.comfortMatch, 100);
   assert.equal(jal.scores.airlineMatch, 100);
   assert.equal(nonJal.scores.airlineMatch, 0);
+});
+
+test("AI preference evaluations replace fixed preference scores and filter semantic hard constraints", () => {
+  const base = scoreRoutes(
+    ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX").slice(0, 2),
+  );
+  assert.equal(base.length, 2);
+  const evaluations = [
+    {
+      routeId: base[0].id,
+      interest: 95,
+      directness: 85,
+      hardConstraintViolated: false,
+      matchedPreferences: ["Enjoys skiing"],
+      explanation: "Strong match.",
+    },
+    {
+      routeId: base[1].id,
+      interest: 5,
+      directness: 90,
+      hardConstraintViolated: true,
+      matchedPreferences: ["Never use airline names containing Air"],
+      explanation: "Violates the airline-name rule.",
+    },
+  ];
+  const ranked = applyPreferenceEvaluations(
+    base,
+    { price: 30, interest: 35, directness: 35 },
+    evaluations,
+    true,
+  );
+  assert.equal(ranked.length, 1);
+  assert.equal(ranked[0].id, base[0].id);
+  assert.equal(ranked[0].scores.interest, 95);
+  assert.equal(ranked[0].scores.directness, 85);
+  assert.equal(ranked[0].scores.airlineMatch, null);
 });
 
 test("all four locales cover the interface and airports", () => {
