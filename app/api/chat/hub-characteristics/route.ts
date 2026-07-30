@@ -1,5 +1,7 @@
 import { createTravelAIProvider } from "../../../ai-travel/providers.ts";
 import airportCities from "../../../data/airport-cities.json" with { type: "json" };
+import localizedAirportNames from "../../../data/airport-localized-names.json" with { type: "json" };
+import { AIRPORT_CITIES, type Locale } from "../../../i18n.ts";
 
 export const runtime = "nodejs";
 
@@ -9,6 +11,10 @@ type HubInput = {
 };
 
 const AIRPORT_CITY_BY_IATA = airportCities as Record<string, string>;
+const LOCALIZED_AIRPORT_NAMES = localizedAirportNames as Record<
+  string,
+  Partial<Record<"en" | "zh" | "ko" | "ja", string>>
+>;
 
 function normalizeHubs(value: unknown): HubInput[] {
   if (!Array.isArray(value)) return [];
@@ -28,6 +34,9 @@ function normalizeHubs(value: unknown): HubInput[] {
 
 export async function POST(request: Request) {
   const { hubs: rawHubs, locale, preferenceContext } = await request.json();
+  const supportedLocale: Locale = locale === "zh" || locale === "ko" || locale === "ja"
+    ? locale
+    : "en";
   const hubs = normalizeHubs(rawHubs).map((hub) => ({
     ...hub,
     city: AIRPORT_CITY_BY_IATA[hub.code] || hub.city,
@@ -36,7 +45,12 @@ export async function POST(request: Request) {
 
   const provider = createTravelAIProvider();
   const fallbackDetails = Object.fromEntries(
-    hubs.map((hub) => [hub.code, { city: hub.city, reason: "" }]),
+    hubs.map((hub) => [hub.code, {
+      city: LOCALIZED_AIRPORT_NAMES[hub.code]?.[supportedLocale]
+        || AIRPORT_CITIES[supportedLocale][hub.code]
+        || hub.city,
+      reason: "",
+    }]),
   );
   if (!provider) return Response.json({ hubs: fallbackDetails });
 
@@ -76,7 +90,11 @@ When preferences are supplied, emphasize genuinely matching city characteristics
       const reason = typeof value.reason === "string" ? value.reason.trim() : "";
       if (!allowedCodes.has(code) || !city || !reason) continue;
       details[code] = {
-        city: city.slice(0, 80),
+        city: (
+          LOCALIZED_AIRPORT_NAMES[code]?.[supportedLocale]
+          || AIRPORT_CITIES[supportedLocale][code]
+          || city
+        ).slice(0, 80),
         reason: reason.slice(0, 120),
       };
     }
