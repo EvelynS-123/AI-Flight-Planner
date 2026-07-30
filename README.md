@@ -24,9 +24,10 @@ https://via-flight-planner-demo.xachaix.chatgpt.site
 - 15-minute server-side flight-search cache
 - One shared weighting bar for cheapest, most interesting, and most direct
 - Live score updates, animated number changes, and animated reordering
-- First-visit AI preference chat with device-local travel memory
-- Explicit must/never preferences filter routes before ranking
-- Saved time and transfer preferences refine directness, while city and airline preferences refine interest
+- First-visit AI preference chat that naturally learns hobbies and travel tastes
+- Device-local semantic memory with AI-organized preference facts instead of a fixed interest taxonomy
+- Offline AI evaluates every candidate route as one batch, including unusual soft preferences and hard constraints
+- Time, transfer, and comfort facts refine directness, while destination and airline facts refine interest
 - Simplified Chinese, English, Korean, and Japanese interfaces
 - Source links and sample dates retained for fare references
 - Full-screen AI stopover plans for multi-city routes

@@ -5,6 +5,7 @@ import {
   POST,
 } from "../app/api/chat/route.ts";
 import { POST as preferenceChatPOST } from "../app/api/preferences/chat/route.ts";
+import { POST as preferenceEvaluatePOST } from "../app/api/preferences/evaluate/route.ts";
 
 test("compact conversational dates are normalized without changing the visible message", () => {
   assert.equal(normalizeCompactDatePrompt("9.15"), "2026-09-15");
@@ -69,10 +70,40 @@ test("chat retries once when the provider returns malformed JSON", async () => {
   }
 });
 
-test("preference chat fallback preserves explicit hard constraints locally", async () => {
+test("preference chat uses natural interviewing and stores semantic preference facts", async () => {
   const keyNames = ["DEEPSEEK_API_KEY", "GLM_API_KEY", "KIMI_API_KEY"];
   const originals = Object.fromEntries(keyNames.map((key) => [key, process.env[key]]));
+  const originalProvider = process.env.TRAVEL_AI_PROVIDER;
+  const originalFetch = globalThis.fetch;
   keyNames.forEach((key) => delete process.env[key]);
+  process.env.TRAVEL_AI_PROVIDER = "glm";
+  process.env.GLM_API_KEY = "test-secret";
+  let providerRequest;
+  globalThis.fetch = async (_url, init) => {
+    providerRequest = JSON.parse(init.body);
+    return Response.json({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            reply: "What do you enjoy most about a ski trip?",
+            readyToSave: true,
+            memory: {
+              summary: "Especially enjoys skiing.",
+              facts: [{
+                statement: "The user especially enjoys skiing and mountain destinations.",
+                scope: "destination-experience",
+                axis: "interest",
+                polarity: "like",
+                strength: 5,
+                hardConstraint: false,
+                evidence: "The user said skiing is a favorite hobby.",
+              }],
+            },
+          }),
+        },
+      }],
+    });
+  };
   try {
     const response = await preferenceChatPOST(new Request("http://local/api/preferences/chat", {
       method: "POST",
@@ -94,13 +125,135 @@ test("preference chat fallback preserves explicit hard constraints locally", asy
     const data = await response.json();
     assert.equal(response.status, 200);
     assert.equal(data.readyToSave, true);
-    assert.equal(data.memory.hardConstraints.avoidOvernight, true);
-    assert.equal(data.memory.hardConstraints.avoidSelfTransfer, true);
-    assert.equal(data.memory.preferredAirlines[0].value, "JAL");
+    assert.equal(data.memory.version, 3);
+    assert.equal(data.memory.facts[0].statement, "The user especially enjoys skiing and mountain destinations.");
+    assert.match(providerRequest.messages[0].content, /Interview naturally/);
+    assert.match(providerRequest.messages[0].content, /Do not default to binary/);
+    assert.match(providerRequest.messages[0].content, /names contain the word "Air"/);
   } finally {
+    globalThis.fetch = originalFetch;
     for (const key of keyNames) {
       if (originals[key] === undefined) delete process.env[key];
       else process.env[key] = originals[key];
     }
+    if (originalProvider === undefined) delete process.env.TRAVEL_AI_PROVIDER;
+    else process.env.TRAVEL_AI_PROVIDER = originalProvider;
+  }
+});
+
+test("preference evaluator applies arbitrary semantic rules to every route in one batch", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.GLM_API_KEY;
+  const originalProvider = process.env.TRAVEL_AI_PROVIDER;
+  process.env.TRAVEL_AI_PROVIDER = "glm";
+  process.env.GLM_API_KEY = "test-secret";
+  let providerRequest;
+  globalThis.fetch = async (_url, init) => {
+    providerRequest = JSON.parse(init.body);
+    return Response.json({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            evaluations: [
+              {
+                routeId: "air-route",
+                interest: 10,
+                directness: 80,
+                interestComponents: [{
+                  label: "Airline name preference",
+                  score: 10,
+                  weight: 100,
+                  reason: "The airline name contains Air.",
+                }],
+                directnessComponents: [{
+                  label: "Route simplicity",
+                  score: 80,
+                  weight: 100,
+                  reason: "The route is direct.",
+                }],
+                hardConstraintViolated: false,
+                matchedPreferences: ["Dislikes airline names containing Air"],
+                explanation: "The airline name contains Air.",
+              },
+              {
+                routeId: "other-route",
+                interest: 90,
+                directness: 70,
+                interestComponents: [{
+                  label: "Airline name preference",
+                  score: 90,
+                  weight: 100,
+                  reason: "The airline name does not contain Air.",
+                }],
+                directnessComponents: [{
+                  label: "Route simplicity",
+                  score: 70,
+                  weight: 100,
+                  reason: "The route is direct.",
+                }],
+                hardConstraintViolated: false,
+                matchedPreferences: ["Dislikes airline names containing Air"],
+                explanation: "The airline name does not contain Air.",
+              },
+            ],
+          }),
+        },
+      }],
+    });
+  };
+  try {
+    const memory = {
+      version: 3,
+      mode: "personalized",
+      summary: "Dislikes airline names containing Air.",
+      facts: [{
+        statement: "The user dislikes airlines whose names contain the word Air.",
+        scope: "airline",
+        axis: "interest",
+        polarity: "dislike",
+        strength: 5,
+        hardConstraint: false,
+        evidence: "The user stated this directly.",
+      }],
+    };
+    const candidate = (routeId, name) => ({
+      routeId,
+      origin: "PVG",
+      destination: "LAX",
+      ticketType: "direct",
+      stopCount: 0,
+      totalPrice: 500,
+      totalDurationMinutes: 720,
+      airlines: [{ code: "XX", name }],
+      departureLocal: "2026-09-01 10:00",
+      arrivalLocal: "2026-09-01 18:00",
+      stopovers: [],
+    });
+    const response = await preferenceEvaluatePOST(new Request("http://local/api/preferences/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        memory,
+        candidates: [
+          candidate("air-route", "Example Air"),
+          candidate("other-route", "Nimbus"),
+        ],
+      }),
+    }));
+    const data = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(data.evaluations.length, 2);
+    assert.equal(data.evaluations[0].interest, 10);
+    assert.equal(data.evaluations[0].interestComponents[0].weight, 100);
+    assert.match(providerRequest.messages[0].content, /fixed tag list/);
+    assert.match(providerRequest.messages[0].content, /Component weights within each axis must sum to 100/);
+    assert.match(providerRequest.messages.at(-1).content, /Example Air/);
+    assert.match(providerRequest.messages.at(-1).content, /Nimbus/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.GLM_API_KEY;
+    else process.env.GLM_API_KEY = originalKey;
+    if (originalProvider === undefined) delete process.env.TRAVEL_AI_PROVIDER;
+    else process.env.TRAVEL_AI_PROVIDER = originalProvider;
   }
 });

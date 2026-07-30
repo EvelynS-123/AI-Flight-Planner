@@ -40,7 +40,7 @@ const CHAT_COPY: Record<Locale, {
     eyebrow: "旅行偏好助手",
     title: "聊聊你喜欢怎样旅行",
     body: "我会每次问一个问题，并把答案用于航线排序和中转建议。",
-    newGreeting: "先聊聊，你选航线时最在意什么？可以从价格、中转体验、时间或航空公司说起。",
+    newGreeting: "先不聊选项。你平时最喜欢做什么，或者旅行中什么体验最容易让你觉得这一趟很值得？",
     returningGreeting: (summary) => summary
       ? `我记得你的偏好是：${summary}。这次想修改或补充什么？`
       : "欢迎回来。这次想修改或补充什么旅行偏好？",
@@ -57,7 +57,7 @@ const CHAT_COPY: Record<Locale, {
     eyebrow: "Travel preference assistant",
     title: "Tell me how you like to travel",
     body: "I will ask one question at a time and use your answers for route ranking and stopover advice.",
-    newGreeting: "What matters most when you choose a flight? You can start with price, connections, timing, or airlines.",
+    newGreeting: "Let us start without a checklist. What do you enjoy doing in everyday life, or what kind of experience makes a trip feel worthwhile to you?",
     returningGreeting: (summary) => summary
       ? `I remember: ${summary}. What would you like to change or add?`
       : "Welcome back. What travel preference would you like to change or add?",

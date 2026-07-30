@@ -71,6 +71,15 @@ function compactText(value: string, limit = 260) {
 }
 
 function preferenceTerms(request: TravelPlanRequest) {
+  const facts = [...request.preferences.facts]
+    .filter((fact) => (
+      fact.axis === "interest"
+      && (fact.polarity === "like" || fact.polarity === "require")
+    ))
+    .sort((a, b) => b.strength - a.strength)
+    .map((fact) => fact.statement)
+    .slice(0, 5);
+  if (facts.length) return facts.join(", ");
   const categories = Object.entries(request.preferences.categories)
     .sort((a, b) => b[1] - a[1])
     .map(([category]) => category)
