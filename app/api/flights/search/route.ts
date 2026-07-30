@@ -1,4 +1,9 @@
 // Simple FNV-1a hash for cache keys and IDs (Workers-compatible, no Node.js crypto needed)
+import {
+  readPersistentFlightSearchCache,
+  writePersistentFlightSearchCache,
+} from "../../../../db/flight-search-cache.ts";
+
 function fnv1a(str: string): string {
   let hash = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
@@ -9,6 +14,9 @@ function fnv1a(str: string): string {
 }
 
 export const runtime = "nodejs";
+
+const MAX_EXPLORATION_HUBS = 3;
+const MAX_PROVIDER_REQUESTS = 1 + MAX_EXPLORATION_HUBS * 2;
 
 const FLIGHT_SEARCH_CACHE = new Map<string, {
   expiresAt: number;
@@ -30,16 +38,33 @@ export async function POST(request: Request) {
     legs,
     explorationHubs,
     explorationHubReasons,
+    variantRequest,
   } = await request.json();
 
   const apiKey = process.env.SERPAPI_API_KEY;
+  let remainingProviderRequests = MAX_PROVIDER_REQUESTS;
+  let providerRequests = 0;
+  const respond = (results: any[]) => Response.json({
+    results,
+    meta: {
+      providerRequests,
+      requestLimit: MAX_PROVIDER_REQUESTS,
+    },
+  });
+  const reserveQueries = (queries: string[], requestedLimit = 1) => {
+    const limit = Math.max(
+      0,
+      Math.min(requestedLimit, remainingProviderRequests),
+    );
+    const selected = queries.slice(0, limit);
+    remainingProviderRequests -= selected.length;
+    return selected;
+  };
 
   let legsToProcess = legs;
   if (!legsToProcess || legsToProcess.length === 0) {
     if (origins && destinations) {
       legsToProcess = [{ origins, destinations }];
-    } else {
-      return Response.json({ results: [] });
     }
   }
 
@@ -52,14 +77,18 @@ export async function POST(request: Request) {
     sampledDateLimit?: number,
     allowMockFallback = true,
     forceOneWay = false,
+    queryLimit = 1,
+    returnDateOverride?: { start: string; end: string },
   ) {
     const outDates = limitDates(getSampledDates(startDate, endDate), sampledDateLimit);
+    const effectiveReturnStart = returnDateOverride?.start || returnDateStart;
+    const effectiveReturnEnd = returnDateOverride?.end || returnDateEnd;
     const useRoundTrip = !forceOneWay
       && tripType === "round_trip"
-      && returnDateStart
-      && returnDateEnd;
+      && effectiveReturnStart
+      && effectiveReturnEnd;
     const retDates = useRoundTrip
-      ? getSampledDates(returnDateStart, returnDateEnd)
+      ? limitDates(getSampledDates(effectiveReturnStart, effectiveReturnEnd), 1)
       : [undefined];
 
     const queries: string[] = [];
@@ -87,19 +116,21 @@ export async function POST(request: Request) {
       }
     }
 
-    const results: any[] = [];
-    if (apiKey) {
-      for (let i = 0; i < queries.length; i += 3) {
-        const chunk = queries.slice(i, i + 3);
-        const chunkResults = await Promise.all(chunk.map(q => executeQuery(q)));
-        results.push(...chunkResults.flat());
-      }
-    }
+    const plannedQueries = apiKey ? reserveQueries(queries, queryLimit) : [];
+    const results = (
+      await Promise.all(
+        plannedQueries.map((query) =>
+          executeQuery(query, () => {
+            providerRequests += 1;
+          })
+        ),
+      )
+    ).flat();
 
     const unique = new Map<string, any>();
     for (const r of results) {
       if (r.price === undefined || r.price === null) continue;
-      if (maxStops !== undefined && r.stops > maxStops) continue;
+      if (maxStops != null && r.stops > maxStops) continue;
 
       const key = `${r.airline}-${r.flightNumbers.join(",")}-${r.departureTime}`;
       if (!unique.has(key)) {
@@ -111,10 +142,94 @@ export async function POST(request: Request) {
       .sort((a, b) => a.price - b.price)
       .slice(0, 100);
 
-    if (finalResults.length === 0 && allowMockFallback) {
+    if (finalResults.length === 0 && allowMockFallback && !apiKey) {
       finalResults = generateMockFlights(legOrigins[0] || "NRT", legDestinations[0] || "LAX", startDate);
     }
     return finalResults;
+  }
+
+  if (variantRequest && typeof variantRequest === "object") {
+    const requestValue = variantRequest as Record<string, unknown>;
+    const selectedDate = typeof requestValue.date === "string"
+      ? requestValue.date
+      : "";
+    const groupKey = typeof requestValue.groupKey === "string"
+      ? requestValue.groupKey
+      : "";
+    const representative = requestValue.representative && typeof requestValue.representative === "object"
+      ? requestValue.representative as Record<string, any>
+      : null;
+
+    if (!isIsoDate(selectedDate) || !groupKey || !representative) {
+      return respond([]);
+    }
+
+    let variants: any[] = [];
+    if (
+      representative.isSelfTransfer
+      && representative.leg1
+      && representative.leg2
+    ) {
+      const firstLeg = representative.leg1;
+      const secondLeg = representative.leg2;
+      const dayOffset = Math.max(
+        0,
+        calendarDayDifference(
+          String(firstLeg.departureTime).slice(0, 10),
+          String(secondLeg.departureTime).slice(0, 10),
+        ),
+      );
+      const secondDate = addIsoDays(selectedDate, dayOffset);
+      const [firstResults, secondResults] = await Promise.all([
+        searchSingleLeg(
+          [firstLeg.origin],
+          [firstLeg.destination],
+          selectedDate,
+          selectedDate,
+          1,
+          false,
+          true,
+          1,
+        ),
+        searchSingleLeg(
+          [secondLeg.origin],
+          [secondLeg.destination],
+          secondDate,
+          secondDate,
+          1,
+          false,
+          true,
+          1,
+        ),
+      ]);
+      variants = combineTwoLegResults(firstResults, secondResults);
+    } else {
+      const returnOverride = shiftedReturnDates(
+        selectedDate,
+        dateRangeStart,
+        returnDateStart,
+        returnDateEnd,
+      );
+      variants = await searchSingleLeg(
+        [representative.origin],
+        [representative.destination],
+        selectedDate,
+        selectedDate,
+        1,
+        false,
+        false,
+        1,
+        returnOverride,
+      );
+    }
+
+    return respond(
+      variants.filter((flight) => flightGroupingKey(flight) === groupKey),
+    );
+  }
+
+  if (!legsToProcess || legsToProcess.length === 0) {
+    return respond([]);
   }
 
   // 1. Process all legs in parallel
@@ -137,9 +252,10 @@ export async function POST(request: Request) {
       leg.destinations,
       start,
       dateRangeEnd,
-      undefined,
+      1,
       true,
       legsToProcess.length > 1,
+      1,
     );
   });
 
@@ -162,7 +278,7 @@ export async function POST(request: Request) {
     );
 
     if (groundedHubs.length === 0 || maxStops === 0) {
-      return Response.json({ results: normalResults });
+      return respond(normalResults);
     }
 
     const searchStart = dateRangeStart || new Date().toISOString().split("T")[0];
@@ -170,15 +286,16 @@ export async function POST(request: Request) {
     const exploredByHub = await Promise.all(
       groundedHubs.map(async (hub) => {
         const [firstLeg, secondLeg] = await Promise.all([
-          searchSingleLeg(originCodes, [hub], searchStart, searchEnd, 3, false, true),
+          searchSingleLeg(originCodes, [hub], searchStart, searchEnd, 1, false, true, 1),
           searchSingleLeg(
             [hub],
             destinationCodes,
             addIsoDays(searchStart, 1),
             addIsoDays(searchEnd, 2),
-            3,
+            1,
             false,
             true,
+            1,
           ),
         ]);
 
@@ -199,11 +316,11 @@ export async function POST(request: Request) {
       }),
     );
 
-    return Response.json({
-      results: dedupeFlights([...normalResults, ...exploredByHub.flat()])
+    return respond(
+      dedupeFlights([...normalResults, ...exploredByHub.flat()])
         .sort((a, b) => a.price - b.price)
         .slice(0, 150),
-    });
+    );
   }
 
   // 3. Explicit required via-city instructions arrive as formal legs.
@@ -214,7 +331,70 @@ export async function POST(request: Request) {
     .sort((a, b) => a.price - b.price)
     .slice(0, 100);
 
-  return Response.json({ results: finalCombined });
+  return respond(finalCombined);
+}
+
+function isIsoDate(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
+}
+
+function calendarDayDifference(from: string, to: string): number {
+  const start = new Date(`${from}T00:00:00Z`).getTime();
+  const end = new Date(`${to}T00:00:00Z`).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  return Math.round((end - start) / 86400000);
+}
+
+function shiftedReturnDates(
+  selectedDate: string,
+  originalDepartureStart: unknown,
+  originalReturnStart: unknown,
+  originalReturnEnd: unknown,
+) {
+  if (
+    typeof originalDepartureStart !== "string"
+    || typeof originalReturnStart !== "string"
+    || typeof originalReturnEnd !== "string"
+  ) {
+    return undefined;
+  }
+
+  const startOffset = calendarDayDifference(originalDepartureStart, originalReturnStart);
+  const endOffset = calendarDayDifference(originalDepartureStart, originalReturnEnd);
+  if (startOffset < 0 || endOffset < startOffset) return undefined;
+  return {
+    start: addIsoDays(selectedDate, startOffset),
+    end: addIsoDays(selectedDate, endOffset),
+  };
+}
+
+function flightGroupingKey(flight: any): string {
+  const category = flight.isSelfTransfer || flight.leg1 || flight.leg2
+    ? "multi-city"
+    : flight.stops === 0
+      ? "direct"
+      : "connection";
+  const operatingAirlines = Array.isArray(flight.flights)
+    ? flight.flights
+        .map((segment: any) =>
+          typeof segment?.airline === "string"
+            ? segment.airline.trim().toLowerCase()
+            : ""
+        )
+        .filter(Boolean)
+    : [];
+  const airlineSignature = operatingAirlines.length
+    ? operatingAirlines.join(">")
+    : String(flight.airline || "").trim().toLowerCase();
+  const path = [
+    flight.origin,
+    ...(Array.isArray(flight.stopAirports) ? flight.stopAirports : []),
+    flight.destination,
+  ]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .join(">");
+  return [category, airlineSignature, path].join("|");
 }
 
 function normalizeExplorationHubs(
@@ -237,7 +417,7 @@ function normalizeExplorationHubs(
         .map((code) => code.trim().toUpperCase())
         .filter((code) => /^[A-Z]{3}$/.test(code) && !endpoints.has(code)),
     ),
-  ).slice(0, 3);
+  ).slice(0, MAX_EXPLORATION_HUBS);
 }
 
 function addIsoDays(dateString: string, days: number): string {
@@ -308,6 +488,10 @@ function combineTwoLegResults(firstLeg: any[], secondLeg: any[]) {
         cabinClass: f1.cabinClass,
         priceLevel: f1.priceLevel,
         flights: [...(f1.flights || []), ...(f2.flights || [])],
+        airportNames: {
+          ...(f1.airportNames || {}),
+          ...(f2.airportNames || {}),
+        },
         isSelfTransfer: true,
         riskPattern,
         leg1: f1,
@@ -439,19 +623,27 @@ function getSampledDates(startStr: string, endStr: string): string[] {
   return dates;
 }
 
-async function executeQuery(url: string) {
+async function executeQuery(url: string, onProviderRequest?: () => void) {
   const cacheTtlMilliseconds = Math.max(
     0,
-    Number(process.env.FLIGHT_SEARCH_CACHE_TTL_MS || 1800000),
+    Number(process.env.FLIGHT_SEARCH_CACHE_TTL_MS || 604800000),
   );
 
-  const cacheKey = fnv1a(url);
+  const canonicalUrl = new URL(url);
+  canonicalUrl.searchParams.delete("api_key");
+  const cacheKey = fnv1a(canonicalUrl.toString());
   const cached = FLIGHT_SEARCH_CACHE.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return cached.results;
   }
+  const persistent = await readPersistentFlightSearchCache(cacheKey);
+  if (persistent) {
+    FLIGHT_SEARCH_CACHE.set(cacheKey, persistent);
+    return persistent.results;
+  }
 
   try {
+    onProviderRequest?.();
     const response = await fetch(url);
     if (!response.ok) return [];
     
@@ -464,9 +656,27 @@ async function executeQuery(url: string) {
       const flightNum = f.flights.map((fl: any) => fl.flight_number);
       const stops = f.flights.length - 1;
       const stopAirports = stops > 0 ? f.flights.slice(0, -1).map((fl: any) => fl.arrival_airport.id) : [];
+      const airportNames = Object.fromEntries(
+        f.flights.flatMap((flight: any) => [
+          [
+            String(flight.departure_airport?.id || "").toUpperCase(),
+            String(flight.departure_airport?.name || "").trim(),
+          ],
+          [
+            String(flight.arrival_airport?.id || "").toUpperCase(),
+            String(flight.arrival_airport?.name || "").trim(),
+          ],
+        ]).filter(([code, name]: [string, string]) => /^[A-Z0-9]{3}$/.test(code) && name),
+      );
 
       const result = {
-        id: fnv1a(`${f.flights[0].airline}-${flightNum.join(",")}-${f.flights[0].departure_airport.time}`),
+        id: fnv1a([
+          f.flights[0].airline,
+          flightNum.join(","),
+          f.flights[0].departure_airport.id,
+          f.flights[f.flights.length - 1].arrival_airport.id,
+          f.flights[0].departure_airport.time,
+        ].join("|")),
         airline: f.flights[0].airline,
         airlineLogo: f.flights[0].airline_logo,
         flightNumbers: flightNum,
@@ -483,16 +693,19 @@ async function executeQuery(url: string) {
         bookingUrl: data.search_metadata?.google_flights_url || "",
         carbonEmissions: f.carbon_emissions?.this_flight,
         priceLevel: data.price_insights?.typical_price_level,
-        flights: f.flights
+        flights: f.flights,
+        airportNames,
       };
       return result;
     });
 
     if (cacheTtlMilliseconds > 0) {
+      const expiresAt = Date.now() + cacheTtlMilliseconds;
       FLIGHT_SEARCH_CACHE.set(cacheKey, {
-        expiresAt: Date.now() + cacheTtlMilliseconds,
+        expiresAt,
         results: parsed,
       });
+      await writePersistentFlightSearchCache(cacheKey, parsed, expiresAt);
     }
 
     return parsed;

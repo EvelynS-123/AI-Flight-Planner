@@ -24,6 +24,7 @@ export type RouteOption = {
   segments: Segment[];
   total: number;
   liveFlights?: any[];
+  airportNames?: Record<string, string>;
 };
 
 export type RouteWeights = {

@@ -24,6 +24,7 @@ export type FlightResult = {
   riskPattern?: "A" | "B" | "C";
   leg1?: any;
   leg2?: any;
+  airportNames?: Record<string, string>;
 };
 
 type SortKey = "price" | "duration" | "departure";
