@@ -635,7 +635,7 @@ export default function RouteFinder() {
               onSearchFailure={failChatSearch}
             />
           </div>
-          {!isChatOpen && (
+          {!isChatOpen && !isLoading && (
             <button
               className="assistant-reopen"
               type="button"
@@ -655,15 +655,17 @@ export default function RouteFinder() {
 
       {searched && (
         <section className="results-section" aria-live="polite">
-          <div className="results-heading">
-            <div>
-              <p className="eyebrow">{copy.routeIdeas}</p>
-              <h2><AirportLabel code={origin} locale={locale} /> <Arrow /> <AirportLabel code={destination} locale={locale} /></h2>
-              <p>{results.length ? resultSummary : copy.noRoute}</p>
+          {!isLoading && (
+            <div className="results-heading">
+              <div>
+                <p className="eyebrow">{copy.routeIdeas}</p>
+                <h2><AirportLabel code={origin} locale={locale} /> <Arrow /> <AirportLabel code={destination} locale={locale} /></h2>
+                <p>{results.length ? resultSummary : copy.noRoute}</p>
+              </div>
             </div>
-          </div>
+          )}
 
-          {results.length > 0 && (
+          {!isLoading && results.length > 0 && (
             <div className={`weight-panel ${isDraggingWeights ? "dragging" : ""}`} aria-label={copy.weightAria}>
               <div className="weight-intro">
                 <div><span>{copy.weightTitle}</span><strong>100%</strong></div>

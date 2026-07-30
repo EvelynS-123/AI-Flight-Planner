@@ -21,6 +21,11 @@ test("chat search skips the weight refinement step and collapses before searchin
 
 test("chat component remains mounted while its interface is collapsed", () => {
   assert.match(routeFinderSource, /<div className="assistant-search-panel" hidden=\{!isChatOpen\}>[\s\S]*<FlightChat/);
-  assert.match(routeFinderSource, /!isChatOpen && \([\s\S]*className="assistant-reopen"/);
+  assert.match(routeFinderSource, /!isChatOpen && !isLoading && \([\s\S]*className="assistant-reopen"/);
   assert.doesNotMatch(routeFinderSource, /\{isChatOpen && \(\s*<FlightChat/);
+});
+
+test("loading state hides stale route metadata and controls", () => {
+  assert.match(routeFinderSource, /!isLoading && \(\s*<div className="results-heading">/);
+  assert.match(routeFinderSource, /!isLoading && results\.length > 0 && \(\s*<div className=\{`weight-panel/);
 });
