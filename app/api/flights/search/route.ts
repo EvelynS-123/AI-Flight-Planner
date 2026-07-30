@@ -79,6 +79,7 @@ export async function POST(request: Request) {
     forceOneWay = false,
     queryLimit = 1,
     returnDateOverride?: { start: string; end: string },
+    includeHidden = false,
   ) {
     const outDates = limitDates(getSampledDates(startDate, endDate), sampledDateLimit);
     const effectiveReturnStart = returnDateOverride?.start || returnDateStart;
@@ -109,6 +110,7 @@ export async function POST(request: Request) {
             else if (cabinClass === "first") tc = 4;
             
             url += `&travel_class=${tc}&hl=en&gl=us`;
+            if (includeHidden) url += "&show_hidden=true";
 
             queries.push(url);
           }
@@ -256,6 +258,8 @@ export async function POST(request: Request) {
       true,
       legsToProcess.length > 1,
       1,
+      undefined,
+      legsToProcess.length === 1,
     );
   });
 

@@ -1,4 +1,5 @@
 import { createTravelAIProvider } from "../../../ai-travel/providers.ts";
+import airportCities from "../../../data/airport-cities.json" with { type: "json" };
 
 export const runtime = "nodejs";
 
@@ -6,6 +7,8 @@ type HubInput = {
   code: string;
   city: string;
 };
+
+const AIRPORT_CITY_BY_IATA = airportCities as Record<string, string>;
 
 function normalizeHubs(value: unknown): HubInput[] {
   if (!Array.isArray(value)) return [];
@@ -25,11 +28,17 @@ function normalizeHubs(value: unknown): HubInput[] {
 
 export async function POST(request: Request) {
   const { hubs: rawHubs, locale, preferenceContext } = await request.json();
-  const hubs = normalizeHubs(rawHubs);
-  if (hubs.length === 0) return Response.json({ reasons: {} });
+  const hubs = normalizeHubs(rawHubs).map((hub) => ({
+    ...hub,
+    city: AIRPORT_CITY_BY_IATA[hub.code] || hub.city,
+  }));
+  if (hubs.length === 0) return Response.json({ hubs: {} });
 
   const provider = createTravelAIProvider();
-  if (!provider) return Response.json({ reasons: {} });
+  const fallbackDetails = Object.fromEntries(
+    hubs.map((hub) => [hub.code, { city: hub.city, reason: "" }]),
+  );
+  if (!provider) return Response.json({ hubs: fallbackDetails });
 
   const language = locale === "zh"
     ? "Simplified Chinese"
@@ -56,25 +65,24 @@ When preferences are supplied, emphasize genuinely matching city characteristics
     }) as { hubs?: unknown };
 
     const allowedCodes = new Set(hubs.map((hub) => hub.code));
-    const details = Object.fromEntries(
-      (Array.isArray(result?.hubs) ? result.hubs : []).flatMap((entry) => {
-        if (!entry || typeof entry !== "object") return [];
-        const value = entry as Record<string, unknown>;
-        const code = typeof value.code === "string"
-          ? value.code.trim().toUpperCase()
-          : "";
-        const city = typeof value.city === "string" ? value.city.trim() : "";
-        const reason = typeof value.reason === "string" ? value.reason.trim() : "";
-        if (!allowedCodes.has(code) || !city || !reason) return [];
-        return [[code, {
-          city: city.slice(0, 80),
-          reason: reason.slice(0, 120),
-        }]];
-      }),
-    );
+    const details = { ...fallbackDetails };
+    for (const entry of Array.isArray(result?.hubs) ? result.hubs : []) {
+      if (!entry || typeof entry !== "object") continue;
+      const value = entry as Record<string, unknown>;
+      const code = typeof value.code === "string"
+        ? value.code.trim().toUpperCase()
+        : "";
+      const city = typeof value.city === "string" ? value.city.trim() : "";
+      const reason = typeof value.reason === "string" ? value.reason.trim() : "";
+      if (!allowedCodes.has(code) || !city || !reason) continue;
+      details[code] = {
+        city: city.slice(0, 80),
+        reason: reason.slice(0, 120),
+      };
+    }
     return Response.json({ hubs: details });
   } catch (error) {
     console.error("Hub characteristic API error:", error);
-    return Response.json({ hubs: {} });
+    return Response.json({ hubs: fallbackDetails });
   }
 }

@@ -49,3 +49,56 @@ test("hub descriptions localize a live airport name to its city", async () => {
     else process.env.GLM_API_KEY = originalKey;
   }
 });
+
+test("airport table supplies city names before AI localization", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalProvider = process.env.TRAVEL_AI_PROVIDER;
+  const originalKey = process.env.GLM_API_KEY;
+  process.env.TRAVEL_AI_PROVIDER = "glm";
+  process.env.GLM_API_KEY = "test-secret";
+  let receivedHubs;
+  globalThis.fetch = async (_url, init) => {
+    const request = JSON.parse(init.body);
+    receivedHubs = JSON.parse(request.messages.at(-1).content).hubs;
+    return Response.json({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            hubs: [
+              { code: "BAH", city: "麦纳麦", reason: "海湾文化、集市与滨海城市生活" },
+              { code: "SHJ", city: "沙迦", reason: "博物馆、传统街区与阿拉伯文化" },
+            ],
+          }),
+        },
+      }],
+    });
+  };
+
+  try {
+    const response = await POST(new Request("http://local/api/chat/hub-characteristics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        locale: "zh",
+        hubs: [
+          { code: "BAH", city: "Bahrain International Airport" },
+          { code: "SHJ", city: "Sharjah International Airport" },
+        ],
+      }),
+    }));
+    const data = await response.json();
+
+    assert.deepEqual(receivedHubs, [
+      { code: "BAH", city: "Manama" },
+      { code: "SHJ", city: "Sharjah" },
+    ]);
+    assert.equal(data.hubs.BAH.city, "麦纳麦");
+    assert.equal(data.hubs.SHJ.city, "沙迦");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalProvider === undefined) delete process.env.TRAVEL_AI_PROVIDER;
+    else process.env.TRAVEL_AI_PROVIDER = originalProvider;
+    if (originalKey === undefined) delete process.env.GLM_API_KEY;
+    else process.env.GLM_API_KEY = originalKey;
+  }
+});
