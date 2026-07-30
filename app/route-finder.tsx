@@ -792,7 +792,7 @@ export default function RouteFinder() {
       </section>
 
       {searched && (
-        <section className="results-section" aria-live="polite">
+        <section className="results-section" aria-live="polite" aria-busy={isLoading}>
           {!isLoading && (
             <div className="results-heading">
               <div>
@@ -851,6 +851,18 @@ export default function RouteFinder() {
                   <span className="directness"><i>→</i>{copy.directest}<strong>{weights.directness}%</strong></span>
                 </div>
               </div>
+            </div>
+          )}
+
+          {isLoading && (
+            <div className="route-search-loader" role="status">
+              <div className="route-search-motion" aria-hidden="true">
+                <span className="route-search-endpoint" />
+                <span className="route-search-track" />
+                <span className="route-search-plane">✈</span>
+                <span className="route-search-endpoint" />
+              </div>
+              <strong>{copy.chatSearching}</strong>
             </div>
           )}
 

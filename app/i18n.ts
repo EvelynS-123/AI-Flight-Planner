@@ -99,6 +99,7 @@ export type Copy = {
   chatAssistantHint: string;
   chatPlaceholder: string;
   chatSend: string;
+  chatThinking: string;
   chatClose: string;
   chatReopen: string;
   chatSearching: string;
@@ -207,6 +208,7 @@ export const COPY: Record<Locale, Copy> = {
     chatAssistantHint: "用自然语言描述你的航程",
     chatPlaceholder: "例如：9月份从东京去洛杉矶…",
     chatSend: "发送",
+    chatThinking: "Via 正在思考…",
     chatClose: "收起航线助手",
     chatReopen: "继续和 Via 航线助手对话",
     chatSearching: "正在搜索实时航班信息…",
@@ -313,6 +315,7 @@ export const COPY: Record<Locale, Copy> = {
     chatAssistantHint: "Describe your trip naturally",
     chatPlaceholder: "e.g. Tokyo to LA in September…",
     chatSend: "Send",
+    chatThinking: "Via is thinking…",
     chatClose: "Collapse flight assistant",
     chatReopen: "Continue with the Via flight assistant",
     chatSearching: "Searching for real-time flights…",
@@ -419,6 +422,7 @@ export const COPY: Record<Locale, Copy> = {
     chatAssistantHint: "자연스러운 문장으로 여정을 알려 주세요",
     chatPlaceholder: "예: 9월에 도쿄에서 LA로…",
     chatSend: "보내기",
+    chatThinking: "Via가 생각하고 있어요…",
     chatClose: "항공편 어시스턴트 접기",
     chatReopen: "Via 항공편 어시스턴트와 계속 대화",
     chatSearching: "실시간 항공편을 검색 중…",
@@ -525,6 +529,7 @@ export const COPY: Record<Locale, Copy> = {
     chatAssistantHint: "自然な言葉で旅程を教えてください",
     chatPlaceholder: "例: 9月に東京からLAへ…",
     chatSend: "送信",
+    chatThinking: "Viaが考えています…",
     chatClose: "フライトアシスタントを閉じる",
     chatReopen: "Via フライトアシスタントと会話を続ける",
     chatSearching: "リアルタイムの航空券を検索中…",

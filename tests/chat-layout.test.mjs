@@ -4,6 +4,7 @@ import test from "node:test";
 
 const routeFinderSource = await readFile(new URL("../app/route-finder.tsx", import.meta.url), "utf8");
 const flightChatSource = await readFile(new URL("../app/flight-chat.tsx", import.meta.url), "utf8");
+const globalCssSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 const preferenceChatSource = await readFile(new URL("../app/preference-chat.tsx", import.meta.url), "utf8");
 const preferenceChatApiSource = await readFile(new URL("../app/api/preferences/chat/route.ts", import.meta.url), "utf8");
 const chatApiSource = await readFile(new URL("../app/api/chat/route.ts", import.meta.url), "utf8");
@@ -44,6 +45,12 @@ test("chat component remains mounted while its interface is collapsed", () => {
 test("loading state hides stale route metadata and controls", () => {
   assert.match(routeFinderSource, /!isLoading && \(\s*<div className="results-heading">/);
   assert.match(routeFinderSource, /!isLoading && results\.length > 0 && \(\s*<div className=\{`weight-panel/);
+});
+
+test("AI thinking and route search expose accessible request-bound loading states", () => {
+  assert.match(flightChatSource, /loading && phase === "chat"[\s\S]*className="chat-searching chat-thinking" role="status"/);
+  assert.match(routeFinderSource, /aria-busy=\{isLoading\}[\s\S]*isLoading && \([\s\S]*className="route-search-loader" role="status"/);
+  assert.match(globalCssSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.route-search-plane/);
 });
 
 test("grouped live results expose one inline date and time selector", () => {
