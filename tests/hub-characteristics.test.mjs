@@ -67,6 +67,7 @@ test("airport table supplies city names before AI localization", async () => {
             hubs: [
               { code: "BAH", city: "麦纳麦", reason: "海湾文化、集市与滨海城市生活" },
               { code: "SHJ", city: "沙迦", reason: "博物馆、传统街区与阿拉伯文化" },
+              { code: "KUL", city: "吉隆坡", reason: "多元美食、热带绿意与现代都市生活" },
             ],
           }),
         },
@@ -83,6 +84,7 @@ test("airport table supplies city names before AI localization", async () => {
         hubs: [
           { code: "BAH", city: "Bahrain International Airport" },
           { code: "SHJ", city: "Sharjah International Airport" },
+          { code: "KUL", city: "Kuala Lumpur International Airport" },
         ],
       }),
     }));
@@ -91,9 +93,11 @@ test("airport table supplies city names before AI localization", async () => {
     assert.deepEqual(receivedHubs, [
       { code: "BAH", city: "Manama" },
       { code: "SHJ", city: "Sharjah" },
+      { code: "KUL", city: "Kuala Lumpur" },
     ]);
     assert.equal(data.hubs.BAH.city, "麦纳麦");
     assert.equal(data.hubs.SHJ.city, "沙迦");
+    assert.equal(data.hubs.KUL.city, "吉隆坡");
   } finally {
     globalThis.fetch = originalFetch;
     if (originalProvider === undefined) delete process.env.TRAVEL_AI_PROVIDER;
