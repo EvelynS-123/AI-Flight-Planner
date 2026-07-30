@@ -117,15 +117,15 @@ The user's locale is "${locale || "en"}". ALWAYS respond in that language.
 - Use the conversation history to avoid re-asking things the user already stated.
 
 === OPTIONAL ROUTE EXPLORATION ===
-- When search is ready, build a broad pool of 8–12 grounded candidates in \`params.explorationHubOptions\` whenever the route has enough geographically plausible choices. These are creative suggestions, not guaranteed inventory; the app intersects them with live connecting itineraries before the user can choose.
+- When search is ready, build a broad, comprehensive pool of grounded candidates in \`params.explorationHubOptions\` whenever the route has geographically plausible choices. Do not impose a fixed candidate count or stop after the first few obvious hubs. These are creative suggestions, not guaranteed inventory; the app intersects them with live connecting itineraries before the user can choose.
 - Each option must include an IATA code, a city label in the user's locale, and a concise reason tied to the user's instruction or preference.
-- Ground every option in this order: an explicitly named optional stopover, a preference stated in the current conversation, or the optional preference context below.
+- Ground every option in the route geography and the city's real travel character, then prioritize an explicitly named optional stopover, a preference stated in the current conversation, or the optional preference context below.
 - If the user requires a specific via city, put it in the required multi-leg \`legs\` route instead of treating it as optional exploration.
 - Do not invent a hub merely to balance categories, and do not target a fixed number of direct, connecting, or multi-city results.
 - It is valid to return an empty \`explorationHubOptions\` array when there is no grounded reason to suggest a hub.
 - Keep suggestions geographically plausible and avoid the origin and final destination.
 - Do not stop at the most obvious global hubs. Mix practical hubs with less conventional, high-interest cities when the detour remains geographically defensible.
-- Maximize diversity across countries, regions, and city character. Do not return multiple airports for the same metro area, and normally avoid suggesting more than one city in the same country.
+- Maximize diversity across countries, regions, and city character. Consider all plausible intermediate regions and defensible detours, including South Asia, Central Asia, the Middle East, Europe, East Asia, and Southeast Asia when relevant to the route. No region is mandatory. Do not return multiple airports for the same metro area, and normally avoid suggesting more than one city in the same country.
 - Use general geographic and travel knowledge rather than a fixed route table. The same examples must never become a reusable hard-coded answer.
 - When preferences are available, match each hub's real travel character to them semantically.
 
@@ -185,6 +185,7 @@ When the user says a region, expand to 3–5 representative hub airports:
 
 === DATE INTERPRETATION ===
 The current reference year is 2026. Interpret fuzzy dates as concrete YYYY-MM-DD ranges:
+- Accept conversational numeric shorthand such as "9.15", "9/15", "9-15", and the same inputs with trailing punctuation as September 15, 2026 when the conversation is asking for a departure date.
 - "11月ごろ" / "around November" → 2026-11-01 to 2026-11-30
 - "秋の連休" → 2026-09-19 to 2026-09-23 (Silver Week)
 - "来月" → calculate from current month
@@ -202,7 +203,7 @@ The current reference year is 2026. Interpret fuzzy dates as concrete YYYY-MM-DD
 - Default: preferLCC: false, alliancePreference: "none"
 
 === OUTPUT FORMAT ===
-You MUST output ONLY a single JSON block wrapped in \`\`\`json ... \`\`\`. No other text outside the JSON block.
+You MUST output ONLY one raw JSON object. Do not wrap it in Markdown or a code fence, and do not add any text outside the JSON object.
 
 When still gathering info (missing origin, destination, or dates):
 \`\`\`json
@@ -246,7 +247,7 @@ When ALL required parameters are collected:
 CRITICAL RULES:
 - NEVER output searchReady: true until origin, destination, AND dates are all known.
 - ALWAYS output valid JSON. No trailing commas, no comments.
-- DO NOT output any text outside the JSON code block.
+- DO NOT output any text outside the raw JSON object.
 `;
 
   const history = messages.slice(0, -1);

@@ -48,6 +48,23 @@ function normalizeBaseUrl(value: string) {
   return value.replace(/\/+$/, "");
 }
 
+function parseJsonContent(content: string) {
+  const trimmed = content.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)?.[1];
+    if (fenced) return JSON.parse(fenced);
+
+    const objectStart = trimmed.indexOf("{");
+    const objectEnd = trimmed.lastIndexOf("}");
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      return JSON.parse(trimmed.slice(objectStart, objectEnd + 1));
+    }
+    throw new Error("Travel AI returned invalid JSON.");
+  }
+}
+
 function readProviderId(environment: ProviderEnvironment): TravelProviderId {
   const candidate = environment.TRAVEL_AI_PROVIDER?.toLowerCase();
   return candidate === "glm" || candidate === "kimi" ? candidate : "deepseek";
@@ -126,11 +143,7 @@ export function createTravelAIProvider(
       const content = payload.choices?.[0]?.message?.content;
       if (!content) throw new Error("Travel AI returned an empty response.");
 
-      try {
-        return JSON.parse(content);
-      } catch {
-        throw new Error("Travel AI returned invalid JSON.");
-      }
+      return parseJsonContent(content);
     },
   };
 }

@@ -683,6 +683,24 @@ test("travel AI retries transient rate limits before failing the recommendation"
   assert.equal(attempts, 2);
 });
 
+test("travel AI accepts fenced JSON from otherwise compatible providers", async () => {
+  const provider = createTravelAIProvider(
+    {
+      GLM_API_KEY: "test-secret",
+      TRAVEL_AI_PROVIDER: "glm",
+    },
+    async () => new Response(JSON.stringify({
+      choices: [{ message: { content: "```json\n{\"searchReady\":false,\"reply\":\"ok\"}\n```" } }],
+    }), { status: 200 }),
+  );
+  assert.ok(provider);
+  assert.deepEqual(await provider.generateJson({
+    purpose: "planning",
+    systemPrompt: "system",
+    userPrompt: "9.15",
+  }), { searchReady: false, reply: "ok" });
+});
+
 test("Bocha search adapter sends a server-side request and normalizes results", async () => {
   let captured;
   let requestCount = 0;

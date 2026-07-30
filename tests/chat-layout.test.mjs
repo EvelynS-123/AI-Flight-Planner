@@ -5,6 +5,7 @@ import test from "node:test";
 const routeFinderSource = await readFile(new URL("../app/route-finder.tsx", import.meta.url), "utf8");
 const flightChatSource = await readFile(new URL("../app/flight-chat.tsx", import.meta.url), "utf8");
 const chatApiSource = await readFile(new URL("../app/api/chat/route.ts", import.meta.url), "utf8");
+const hubCharacteristicsSource = await readFile(new URL("../app/api/chat/hub-characteristics/route.ts", import.meta.url), "utf8");
 const flightSearchApiSource = await readFile(new URL("../app/api/flights/search/route.ts", import.meta.url), "utf8");
 
 test("chatbot replaces the legacy origin destination and month search form", () => {
@@ -44,7 +45,8 @@ test("grouped live results expose one inline date and time selector", () => {
 test("route exploration stays generalized, diverse, and preference-grounded", () => {
   assert.match(chatApiSource, /match each hub's real travel character to them semantically/);
   assert.match(chatApiSource, /rather than a fixed route table/);
-  assert.match(chatApiSource, /8–12 grounded candidates/);
+  assert.match(chatApiSource, /Do not impose a fixed candidate count/);
+  assert.match(chatApiSource, /including South Asia, Central Asia, the Middle East, Europe, East Asia, and Southeast Asia/);
   assert.match(chatApiSource, /Maximize diversity across countries, regions, and city character/);
   assert.match(chatApiSource, /do not target a fixed number of direct, connecting, or multi-city results/);
   assert.match(flightSearchApiSource, /normalizeExplorationHubs/);
@@ -62,7 +64,16 @@ test("stopover choices are extracted from one verified regular search", () => {
   assert.match(flightChatSource, /verifiedHubOptions/);
   assert.match(flightChatSource, /explorationHubs: \[\]/);
   assert.match(flightChatSource, /flight\.stopAirports/);
-  assert.match(flightChatSource, /Verified in live connecting itineraries/);
+  assert.doesNotMatch(flightChatSource, /实时联程航线已验证|Verified in live connecting itineraries/);
+  assert.match(flightChatSource, /\/api\/chat\/hub-characteristics/);
+  assert.match(hubCharacteristicsSource, /Keep every supplied IATA code exactly once/);
+  assert.doesNotMatch(hubCharacteristicsSource, /AUH|IST|HAK|DEL|BOM/);
+  assert.doesNotMatch(flightChatSource, /\.slice\(0, 12\)/);
+});
+
+test("chat accepts compact conversational dates without Markdown JSON ambiguity", () => {
+  assert.match(chatApiSource, /"9\.15", "9\/15", "9-15"/);
+  assert.match(chatApiSource, /Do not wrap it in Markdown or a code fence/);
 });
 
 test("chat always searches one way and never asks for return dates", () => {
