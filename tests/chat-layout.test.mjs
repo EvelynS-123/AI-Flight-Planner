@@ -91,7 +91,7 @@ test("route exploration stays generalized, diverse, and preference-grounded", ()
 test("users explicitly limit stopover exploration before search", () => {
   assert.match(flightChatSource, /selectedHubs\.length >= 3/);
   assert.match(flightChatSource, /explorationHubs: selectedHubs/);
-  assert.match(flightChatSource, /1 \+ count \* 2/);
+  assert.doesNotMatch(flightChatSource, /live searches|实时搜索|リアルタイム検索は約|실시간 검색 약/);
   assert.match(flightSearchApiSource, /MAX_PROVIDER_REQUESTS = 1 \+ MAX_EXPLORATION_HUBS \* 2/);
   assert.match(flightChatSource, /option\.codes\.join\(" \/ "\)/);
   assert.match(flightSearchApiSource, /\.split\(","\)/);

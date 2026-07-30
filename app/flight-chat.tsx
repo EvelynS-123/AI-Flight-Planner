@@ -81,28 +81,24 @@ function hubSelectorCopy(locale: Locale) {
     title: "限定中转城市",
     hint: "仅探索你选择的城市，最多 3 个",
     selected: (count: number) => `已选 ${count}/3`,
-    searches: (count: number) => `预计 ${1 + count * 2} 次实时搜索`,
   };
   if (locale === "ja") return {
     unverified: "選択した日付では該当する航空便が見つからない場合があります",
     title: "乗り継ぎ都市を選択",
     hint: "選択した都市のみ探索、最大3都市",
     selected: (count: number) => `${count}/3 選択済み`,
-    searches: (count: number) => `リアルタイム検索は約${1 + count * 2}回`,
   };
   if (locale === "ko") return {
     unverified: "선택한 날짜에는 관련 항공편을 찾지 못할 수 있습니다",
     title: "경유 도시 선택",
     hint: "선택한 도시만 탐색하며 최대 3개까지 가능합니다",
     selected: (count: number) => `${count}/3 선택됨`,
-    searches: (count: number) => `실시간 검색 약 ${1 + count * 2}회`,
   };
   return {
     unverified: "Related flights may not be available for the selected dates",
     title: "Choose stopover cities",
     hint: "Only selected cities are explored, up to 3",
     selected: (count: number) => `${count}/3 selected`,
-    searches: (count: number) => `About ${1 + count * 2} live searches`,
   };
 }
 
@@ -491,7 +487,6 @@ export function FlightChat({
                 </div>
                 <div>
                   <strong>{hubCopy.selected(selectedHubs.length)}</strong>
-                  <span>{hubCopy.searches(selectedHubs.length)}</span>
                 </div>
               </div>
               <div className="chat-hub-options" role="group" aria-label={hubCopy.title}>

@@ -37,7 +37,6 @@ function liveFlightPickerCopy(locale: Locale) {
     title: "按需查询日期与时刻",
     dateLabel: "选择出发日期",
     timeLabel: "选择当天时刻",
-    cost: (multiCity: boolean) => `查询该日期会使用 ${multiCity ? 2 : 1} 次实时搜索`,
     loading: "正在查询该日期…",
     empty: "该日期没有同航司、同路线的航班",
     count: (value: number) => `${value} 个当天航班`,
@@ -46,7 +45,6 @@ function liveFlightPickerCopy(locale: Locale) {
     title: "날짜와 시간 필요 시 검색",
     dateLabel: "출발 날짜 선택",
     timeLabel: "해당 날짜 시간 선택",
-    cost: (multiCity: boolean) => `이 날짜는 실시간 검색 ${multiCity ? 2 : 1}회를 사용합니다`,
     loading: "해당 날짜를 검색하는 중…",
     empty: "같은 항공사와 경로의 항공편이 없습니다",
     count: (value: number) => `해당 날짜 항공편 ${value}개`,
@@ -55,7 +53,6 @@ function liveFlightPickerCopy(locale: Locale) {
     title: "日付と時刻を必要時に検索",
     dateLabel: "出発日を選択",
     timeLabel: "当日の時刻を選択",
-    cost: (multiCity: boolean) => `この日付はリアルタイム検索を${multiCity ? 2 : 1}回使用します`,
     loading: "この日付を検索中…",
     empty: "同じ航空会社・経路の便がありません",
     count: (value: number) => `当日の便 ${value}件`,
@@ -64,7 +61,6 @@ function liveFlightPickerCopy(locale: Locale) {
     title: "Search dates and times on demand",
     dateLabel: "Choose departure date",
     timeLabel: "Choose a time that day",
-    cost: (multiCity: boolean) => `This date uses ${multiCity ? 2 : 1} live searches`,
     loading: "Searching this date…",
     empty: "No flights match this airline and route on that date",
     count: (value: number) => `${value} flights that day`,
@@ -981,7 +977,6 @@ export default function RouteFinder() {
                             <div className="live-variant-summary">
                               <span>{pickerCopy.title}</span>
                               <strong>{pickerCopy.count(variantsForDate.length)}</strong>
-                              <small>{pickerCopy.cost(route.ticketType === "multi-city")}</small>
                             </div>
                             <label className="variant-field">
                               <span>{pickerCopy.dateLabel}</span>
