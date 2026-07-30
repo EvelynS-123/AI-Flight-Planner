@@ -1,6 +1,24 @@
-import { createTravelAIProvider } from "../../ai-travel/providers";
+import { createTravelAIProvider } from "../../ai-travel/providers.ts";
 
 export const runtime = "nodejs";
+
+export function normalizeCompactDatePrompt(value: string) {
+  const match = value.trim().match(/^(\d{1,2})\s*[./-]\s*(\d{1,2})\s*[，。,.、]*$/);
+  if (!match) return value;
+
+  const month = Number(match[1]);
+  const day = Number(match[2]);
+  const date = new Date(Date.UTC(2026, month - 1, day));
+  if (
+    date.getUTCFullYear() !== 2026
+    || date.getUTCMonth() !== month - 1
+    || date.getUTCDate() !== day
+  ) {
+    return value;
+  }
+
+  return `2026-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 
 export async function POST(request: Request) {
   const { messages, locale, preferenceContext } = await request.json();
@@ -206,15 +224,12 @@ The current reference year is 2026. Interpret fuzzy dates as concrete YYYY-MM-DD
 You MUST output ONLY one raw JSON object. Do not wrap it in Markdown or a code fence, and do not add any text outside the JSON object.
 
 When still gathering info (missing origin, destination, or dates):
-\`\`\`json
 {
   "searchReady": false,
   "reply": "Your conversational reply here (in the user's locale language)"
 }
-\`\`\`
 
 When ALL required parameters are collected:
-\`\`\`json
 {
   "searchReady": true,
   "reply": "Confirmation message summarizing the search (in user's locale language)",
@@ -242,7 +257,6 @@ When ALL required parameters are collected:
     "adults": 1
   }
 }
-\`\`\`
 
 CRITICAL RULES:
 - NEVER output searchReady: true until origin, destination, AND dates are all known.
@@ -251,15 +265,29 @@ CRITICAL RULES:
 `;
 
   const history = messages.slice(0, -1);
-  const userPrompt = messages[messages.length - 1].content;
+  const userPrompt = normalizeCompactDatePrompt(messages[messages.length - 1].content);
 
   try {
-    const aiResponse = await provider.generateJson({
-      purpose: "planning",
-      systemPrompt,
-      userPrompt,
-      history
-    }) as any;
+    let aiResponse;
+    try {
+      aiResponse = await provider.generateJson({
+        purpose: "planning",
+        systemPrompt,
+        userPrompt,
+        history
+      }) as any;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (!message.includes("invalid JSON")) throw error;
+      aiResponse = await provider.generateJson({
+        purpose: "planning",
+        systemPrompt: `${systemPrompt}
+
+The previous response was malformed. Return exactly one valid raw JSON object now.`,
+        userPrompt,
+        history
+      }) as any;
+    }
 
     if (aiResponse?.searchReady && aiResponse.params && typeof aiResponse.params === "object") {
       const {
