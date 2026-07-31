@@ -123,15 +123,16 @@ export default function PreferenceChat({
   const [readyToSave, setReadyToSave] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const greeting = memory?.mode === "personalized"
+    ? CHAT_COPY[locale].returningGreeting(memory.summary)
+    : CHAT_COPY[locale].newGreeting;
 
   useEffect(() => {
     const nextMemory = memory ?? defaultTravelPreferences();
     setDraftMemory(nextMemory);
     setMessages([{
       role: "assistant",
-      content: memory?.mode === "personalized"
-        ? CHAT_COPY[locale].returningGreeting(memory.summary)
-        : CHAT_COPY[locale].newGreeting,
+      content: greeting,
     }]);
     setInput("");
     setLoading(false);
@@ -139,6 +140,14 @@ export default function PreferenceChat({
     const frame = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [memory]);
+
+  useEffect(() => {
+    setMessages((current) => {
+      if (!current.length || current[0].role !== "assistant") return current;
+      if (current[0].content === greeting) return current;
+      return [{ ...current[0], content: greeting }, ...current.slice(1)];
+    });
+  }, [locale, memory]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;

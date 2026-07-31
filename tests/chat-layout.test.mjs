@@ -39,6 +39,22 @@ test("preference chatbot replaces numeric quiz without removing manual route wei
   assert.match(preferenceChatApiSource, /Preprocess the conversation into concise, durable preference facts/);
 });
 
+test("first visit requires a saved language before opening preference chat", () => {
+  assert.match(routeFinderSource, /LOCALE_STORAGE_KEY/);
+  assert.match(routeFinderSource, /localeGate/);
+  assert.match(routeFinderSource, /className=\{`language-gate/);
+  assert.match(routeFinderSource, /function chooseInitialLocale/);
+  assert.match(routeFinderSource, /localStorage\.setItem\(LOCALE_STORAGE_KEY/);
+  assert.match(routeFinderSource, /onLocaleChange=\{changeLocale\}/);
+});
+
+test("changing language updates the preference chat greeting", () => {
+  assert.match(
+    preferenceChatSource,
+    /setMessages\(\(current\) =>[\s\S]*current\.slice\(1\)[\s\S]*\[locale, memory\]/,
+  );
+});
+
 test("route details keep only three scores and reveal component weights on hover or focus", () => {
   assert.doesNotMatch(routeFinderSource, /copy\.whyHere|copy\.scoreNote/);
   assert.equal((routeFinderSource.match(/<ScoreDetail/g) || []).length, 3);

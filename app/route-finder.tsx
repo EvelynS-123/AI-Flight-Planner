@@ -30,6 +30,7 @@ import {
 } from "./preference-evaluation";
 
 type LiveSearchContext = Record<string, unknown>;
+type LocaleGateState = "loading" | "selecting" | "ready";
 
 function liveFlightOptionLabel(flight: FlightResult, locale: Locale): string {
   const [, time = ""] = flight.departureTime.split(" ");
@@ -83,6 +84,17 @@ import {
 } from "./travel-preferences";
 
 const SCORE_NUMBER_PLUGINS = [continuous];
+const LOCALE_STORAGE_KEY = "via-locale-v1";
+const LANGUAGE_GATE_OPTIONS: Record<Locale, { name: string; detail: string }> = {
+  zh: { name: "简体中文", detail: "使用简体中文继续" },
+  en: { name: "English", detail: "Continue in English" },
+  ko: { name: "한국어", detail: "한국어로 계속하기" },
+  ja: { name: "日本語", detail: "日本語で続ける" },
+};
+
+function isLocale(value: string | null): value is Locale {
+  return LOCALE_OPTIONS.some((option) => option.code === value);
+}
 
 function OriginalArtDefs() {
   return (
@@ -136,6 +148,42 @@ function SketchPlane({ size = 28 }: { size?: number }) {
     <svg width={size} height={size} viewBox="0 0 28 28" fill="none" aria-hidden="true">
       <path d="M24 14 L8 6 L10 13 L4 14 L10 15 L8 22 Z" fill="#5A9CC0" fillOpacity="0.9" stroke="#3A7EA8" strokeWidth="0.5" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+function LanguageGate({
+  loading,
+  onSelect,
+}: {
+  loading: boolean;
+  onSelect: (locale: Locale) => void;
+}) {
+  return (
+    <div className={`language-gate ${loading ? "is-loading" : ""}`}>
+      {!loading && (
+        <section className="language-gate-panel" aria-labelledby="language-gate-title">
+          <div className="language-gate-brand">
+            <SketchPlane size={36} />
+            <span>Via</span>
+          </div>
+          <p>Welcome · 欢迎 · ようこそ · 환영합니다</p>
+          <h1 id="language-gate-title">Choose your language</h1>
+          <span className="language-gate-subtitle">选择语言 · 言語を選択 · 언어를 선택하세요</span>
+          <div className="language-gate-options">
+            {LOCALE_OPTIONS.map((option) => {
+              const gateOption = LANGUAGE_GATE_OPTIONS[option.code];
+              return (
+                <button key={option.code} type="button" onClick={() => onSelect(option.code)}>
+                  <strong>{gateOption.name}</strong>
+                  <small>{gateOption.detail}</small>
+                  <i aria-hidden="true">→</i>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -276,6 +324,7 @@ function ScoreDetail({
 
 export default function RouteFinder() {
   const [locale, setLocale] = useState<Locale>("zh");
+  const [localeGate, setLocaleGate] = useState<LocaleGateState>("loading");
   const [origin, setOrigin] = useState<AirportCode>("PVG");
   const [destination, setDestination] = useState<AirportCode>("LAX");
   const [month, setMonth] = useState<string>("Sep");
@@ -537,22 +586,41 @@ export default function RouteFinder() {
   }, [localeOption.htmlLang]);
 
   useEffect(() => {
+    let storedLocale: Locale | null = null;
     let stored: TravelPreferenceState | null = null;
     try {
+      const rawLocale = localStorage.getItem(LOCALE_STORAGE_KEY);
+      if (isLocale(rawLocale)) storedLocale = rawLocale;
       const raw = localStorage.getItem(PREFERENCE_STORAGE_KEY)
         ?? localStorage.getItem(LEGACY_PREFERENCE_STORAGE_KEY)
         ?? localStorage.getItem(ORIGINAL_PREFERENCE_STORAGE_KEY);
       stored = sanitizeTravelPreferences(JSON.parse(raw ?? "null"));
     } catch {
+      storedLocale = null;
       stored = null;
+    }
+    if (storedLocale) {
+      setLocale(storedLocale);
+      setLocaleGate("ready");
+    } else {
+      setLocaleGate("selecting");
     }
     if (stored) {
       localStorage.setItem(PREFERENCE_STORAGE_KEY, JSON.stringify(stored));
       setTravelPreferences(stored);
-    } else {
+    } else if (storedLocale) {
       setQuizOpen(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (localeGate === "ready") return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [localeGate]);
 
   useEffect(() => {
     const continueDrag = (event: globalThis.PointerEvent) => {
@@ -837,6 +905,21 @@ export default function RouteFinder() {
     setIsChatOpen(true);
   }
 
+  function changeLocale(nextLocale: Locale) {
+    setLocale(nextLocale);
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
+    } catch {
+      // Keep the selected language for this visit when browser storage is unavailable.
+    }
+  }
+
+  function chooseInitialLocale(nextLocale: Locale) {
+    changeLocale(nextLocale);
+    setLocaleGate("ready");
+    setQuizOpen(true);
+  }
+
   function storePreferences(next: TravelPreferenceState) {
     localStorage.setItem(PREFERENCE_STORAGE_KEY, JSON.stringify(next));
     setTravelPreferences(next);
@@ -856,7 +939,7 @@ export default function RouteFinder() {
     <>
     <main
       className={`planner ${quizOpen ? "preference-open" : ""} ${aiRoute ? "ai-workspace-open" : ""}`}
-      aria-hidden={quizOpen || Boolean(aiRoute) || undefined}
+      aria-hidden={localeGate !== "ready" || quizOpen || Boolean(aiRoute) || undefined}
     >
       <OriginalArtDefs />
       <header className="topbar">
@@ -869,7 +952,7 @@ export default function RouteFinder() {
           <span className="demo-badge">{copy.demoBadge}</span>
           <label className="language-picker">
             <span className="sr-only">{copy.language}</span>
-            <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)} aria-label={copy.language}>
+            <select value={locale} onChange={(event) => changeLocale(event.target.value as Locale)} aria-label={copy.language}>
               {LOCALE_OPTIONS.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
             </select>
           </label>
@@ -1340,7 +1423,10 @@ export default function RouteFinder() {
         <p>{copy.footer}</p>
       </footer>
     </main>
-    {aiRoute && (
+    {localeGate !== "ready" && (
+      <LanguageGate loading={localeGate === "loading"} onSelect={chooseInitialLocale} />
+    )}
+    {localeGate === "ready" && aiRoute && (
       <AITravelWorkspace
         route={aiRoute}
         locale={locale}
@@ -1349,11 +1435,11 @@ export default function RouteFinder() {
         onClose={() => setAiRouteId(null)}
       />
     )}
-    {quizOpen && (
+    {localeGate === "ready" && quizOpen && (
       <PreferenceChat
         locale={locale}
         memory={travelPreferences}
-        onLocaleChange={setLocale}
+        onLocaleChange={changeLocale}
         onClose={closePreferences}
         onSave={storePreferences}
       />
