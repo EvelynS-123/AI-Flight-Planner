@@ -74,8 +74,13 @@ function cleanCandidates(value: unknown): PreferenceRouteCandidate[] {
 
 function cleanEvaluations(
   value: unknown,
-  candidateIds: Set<string>,
+  candidates: PreferenceRouteCandidate[],
 ): RoutePreferenceEvaluation[] {
+  const candidateIds = new Set(candidates.map((candidate) => candidate.routeId));
+  const stopoverAirportsByRoute = new Map(candidates.map((candidate) => [
+    candidate.routeId,
+    new Set(candidate.stopovers.map((stop) => stop.airport.trim().toUpperCase())),
+  ]));
   if (!Array.isArray(value)) return [];
   const byRoute = new Map<string, RoutePreferenceEvaluation>();
   const cleanComponents = (value: unknown): ScoreComponent[] => {
@@ -124,9 +129,16 @@ function cleanEvaluations(
     const interestComponents = cleanComponents(candidate.interestComponents);
     const directnessComponents = cleanComponents(candidate.directnessComponents);
     const strongPreferencePenalty = Number(candidate.strongPreferencePenalty);
+    const stopoverAirports = stopoverAirportsByRoute.get(routeId) ?? new Set<string>();
+    const preferredCityAirports = Array.isArray(candidate.preferredCityAirports)
+      ? [...new Set(candidate.preferredCityAirports
+        .map((airport) => cleanText(airport, 8).toUpperCase())
+        .filter((airport) => stopoverAirports.has(airport)))]
+      : [];
     byRoute.set(routeId, {
       routeId,
       interest: weightedScore(interestComponents, candidate.interest),
+      preferredCityAirports,
       directness: weightedScore(directnessComponents, candidate.directness),
       interestComponents,
       directnessComponents,
@@ -177,6 +189,10 @@ Apply every preference fact semantically. Do not rely on a fixed tag list or pre
 - Choose component labels from the actual preference facts and route qualities instead of a fixed component list.
 - Write component labels, reasons, and explanations in the requested responseLanguage.
 - A direct route has no stopover experience, but its airline may still affect interest.
+- Treat usableMinutes as authoritative for stopover experience. A stopover with usableMinutes > 0 allows actual city exploration, which must be the primary city-interest signal and may use the full 0-100 component scale.
+- A stopover with usableMinutes <= 0 is airport-only. Do not score city sightseeing, dining, culture, or other city activities for it. Airport-only experience may contribute a small amount, but every interest component attributable to that stopover must score no more than 20.
+- When a route contains both usable and airport-only stopovers, actual city exploration must receive the majority of their combined city-experience weight.
+- If a positive preference fact explicitly names a supplied stopover city or airport, include that stopover's exact airport code in preferredCityAirports. Include it even when usableMinutes is 0. Do not include cities mentioned only in negative preferences. The server applies the fixed city-match bonus, so do not add that bonus to the component scores yourself.
 - Mark hardConstraintViolated true only when an explicit hardConstraint fact is clearly violated.
 - Soft dislikes lower the relevant score but never filter a route.
 - Strong soft dislikes and avoids must also remain meaningful outside the manual axis sliders. For each clearly violated non-hard dislike or avoid fact, add 10 points to strongPreferencePenalty when its strength is 4 and 15 points when its strength is 5. Sum multiple violations, capped at 30. Use 0 when no such fact is clearly violated.
@@ -188,6 +204,7 @@ Return only JSON:
   "evaluations": [{
     "routeId": "exact supplied routeId",
     "interest": 0,
+    "preferredCityAirports": ["exact supplied stopover airport code"],
     "directness": 0,
     "strongPreferencePenalty": 0,
     "interestComponents": [{
@@ -240,7 +257,7 @@ Return exactly one evaluation for every supplied routeId. Scores range from 0 to
         }) as Record<string, unknown>;
         const evaluations = cleanEvaluations(
           result.evaluations,
-          new Set(batch.map((candidate) => candidate.routeId)),
+          batch,
         );
         if (evaluations.length !== batch.length) {
           throw new Error(`Preference AI did not evaluate every route in batch ${batchIndex + 1}.`);

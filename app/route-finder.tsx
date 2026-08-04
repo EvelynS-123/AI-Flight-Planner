@@ -27,7 +27,6 @@ import {
   applyPreferenceEvaluations,
   preferenceCandidateForRoute,
   type RoutePreferenceEvaluation,
-  type ScoreComponent,
 } from "./preference-evaluation";
 
 type LiveSearchContext = Record<string, unknown>;
@@ -240,53 +239,6 @@ function localizeWeekdays(days: readonly number[], locale: Locale) {
     .join(locale === "en" ? ", " : "、");
 }
 
-function scoreDetailCopy(locale: Locale) {
-  if (locale === "zh") return {
-    breakdown: "得分构成",
-    overallWeight: "总权重",
-    score: "得分",
-    weight: "权重",
-    price: "相对价格",
-    priceReason: "根据当前候选航线中的价格位置计算",
-    interest: "AI 偏好匹配",
-    selectedStopover: "已选中转城市",
-    directness: "AI 直接度匹配",
-  };
-  if (locale === "ko") return {
-    breakdown: "점수 구성",
-    overallWeight: "전체 가중치",
-    score: "점수",
-    weight: "가중치",
-    price: "상대 가격",
-    priceReason: "현재 후보 항공편의 가격 범위에서 계산",
-    interest: "AI 취향 일치",
-    selectedStopover: "선택한 경유 도시",
-    directness: "AI 직행성 일치",
-  };
-  if (locale === "ja") return {
-    breakdown: "スコア内訳",
-    overallWeight: "全体の重み",
-    score: "スコア",
-    weight: "重み",
-    price: "相対価格",
-    priceReason: "現在の候補ルート内での価格位置から計算",
-    interest: "AI 好み一致度",
-    selectedStopover: "選択した乗り継ぎ都市",
-    directness: "AI 直行性一致度",
-  };
-  return {
-    breakdown: "Score breakdown",
-    overallWeight: "Overall weight",
-    score: "Score",
-    weight: "Weight",
-    price: "Relative price",
-    priceReason: "Calculated from its price position among the current routes",
-    interest: "AI preference match",
-    selectedStopover: "Selected stopover city",
-    directness: "AI directness match",
-  };
-}
-
 function preferenceEvaluationCopy(locale: Locale) {
   if (locale === "zh") return {
     loading: "AI 正在生成个性化评分…",
@@ -309,50 +261,11 @@ function preferenceEvaluationCopy(locale: Locale) {
 function ScoreDetail({
   label,
   total,
-  overallWeight,
-  components,
-  bonus = 0,
-  locale,
-  tooltipId,
 }: {
   label: string;
   total: number;
-  overallWeight: number;
-  components: ScoreComponent[];
-  bonus?: number;
-  locale: Locale;
-  tooltipId: string;
 }) {
-  const detailCopy = scoreDetailCopy(locale);
-  return (
-    <div className="score-detail" tabIndex={0} aria-describedby={tooltipId}>
-      <span className="score-pill">{label}<strong>{Math.round(total)}</strong></span>
-      <div className="score-tooltip" id={tooltipId} role="tooltip">
-        <div className="score-tooltip-heading">
-          <strong>{detailCopy.breakdown}</strong>
-          <span>{detailCopy.overallWeight} {overallWeight}%</span>
-        </div>
-        <div className="score-component-list">
-          {components.map((component, index) => (
-            <div className="score-component" key={`${component.label}-${index}`}>
-              <span>{component.label}</span>
-              <div>
-                <strong>{detailCopy.score} {Math.round(component.score)}</strong>
-                <small>{detailCopy.weight} {Math.round(component.weight)}%</small>
-              </div>
-              {component.reason && <p>{component.reason}</p>}
-            </div>
-          ))}
-          {bonus > 0 && (
-            <div className="score-bonus">
-              <span>{detailCopy.selectedStopover}</span>
-              <strong>+{bonus}</strong>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <span className="score-pill">{label}<strong>{Math.round(total)}</strong></span>;
 }
 
 export default function RouteFinder() {
@@ -1188,29 +1101,6 @@ export default function RouteFinder() {
                   : undefined;
                 const hasInternalConnections = route.ticketType === "multi-city"
                   && route.scheduledStops.some((stop) => stop.kind === "connection");
-                const detailCopy = scoreDetailCopy(locale);
-                const priceComponents: ScoreComponent[] = [{
-                  label: detailCopy.price,
-                  score: route.scores.price,
-                  weight: 100,
-                  reason: detailCopy.priceReason,
-                }];
-                const interestComponents = route.preferenceEvaluation?.interestComponents.length
-                  ? route.preferenceEvaluation.interestComponents
-                  : [{
-                    label: detailCopy.interest,
-                    score: route.scores.interest,
-                    weight: 100,
-                    reason: route.preferenceEvaluation?.explanation ?? "",
-                  }];
-                const directnessComponents = route.preferenceEvaluation?.directnessComponents.length
-                  ? route.preferenceEvaluation.directnessComponents
-                  : [{
-                    label: detailCopy.directness,
-                    score: route.scores.directness,
-                    weight: 100,
-                    reason: route.preferenceEvaluation?.explanation ?? "",
-                  }];
                 return (
                   <div className="route-motion" key={route.id} ref={(element) => { if (element) cardRefs.current.set(route.id, element); else cardRefs.current.delete(route.id); }}>
                   <article className={`route-card ${isOpen ? "open" : ""} ${selectedRoute?.id === route.id ? "globe-selected" : ""}`}>
@@ -1449,27 +1339,14 @@ export default function RouteFinder() {
                           <ScoreDetail
                             label={copy.cheapest}
                             total={route.scores.price}
-                            overallWeight={weights.price}
-                            components={priceComponents}
-                            locale={locale}
-                            tooltipId={`${route.id}-price-breakdown`}
                           />
                           <ScoreDetail
                             label={copy.interesting}
                             total={route.scores.interest}
-                            overallWeight={weights.interest}
-                            components={interestComponents}
-                            bonus={route.preferenceEvaluation?.interestBonus}
-                            locale={locale}
-                            tooltipId={`${route.id}-interest-breakdown`}
                           />
                           <ScoreDetail
                             label={copy.directest}
                             total={route.scores.directness}
-                            overallWeight={weights.directness}
-                            components={directnessComponents}
-                            locale={locale}
-                            tooltipId={`${route.id}-directness-breakdown`}
                           />
                         </div>
                       </div>}

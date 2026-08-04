@@ -63,13 +63,11 @@ test("changing language updates the preference chat greeting", () => {
   );
 });
 
-test("route details keep only three scores and reveal component weights on hover or focus", () => {
+test("route details keep only three scores without a hover breakdown", () => {
   assert.doesNotMatch(routeFinderSource, /copy\.whyHere|copy\.scoreNote/);
   assert.equal((routeFinderSource.match(/<ScoreDetail/g) || []).length, 3);
-  assert.match(routeFinderSource, /interestComponents/);
-  assert.match(routeFinderSource, /directnessComponents/);
-  assert.match(globalCssSource, /\.score-detail:hover \.score-tooltip/);
-  assert.match(globalCssSource, /\.score-detail:focus-visible \.score-tooltip/);
+  assert.doesNotMatch(routeFinderSource, /score-tooltip|scoreDetailCopy/);
+  assert.doesNotMatch(globalCssSource, /\.score-tooltip|\.score-component|\.score-bonus/);
 });
 
 test("chat component remains mounted while its interface is collapsed", () => {
