@@ -162,9 +162,9 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 .route-globe-itinerary { display: grid; gap: 8px; margin: 0; padding: 1px 0 0; list-style: none; }
 .route-globe-itinerary li { position: relative; min-width: 0; display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 9px; align-items: start; }
 .route-globe-itinerary li:not(:last-child)::after { content: ""; position: absolute; top: 12px; bottom: -9px; left: 5px; width: 2px; background: linear-gradient(rgba(58, 126, 168, 0.42), rgba(58, 126, 168, 0.12)); border-radius: 999px; }
-.route-globe-itinerary i { position: relative; z-index: 1; width: 12px; height: 12px; margin-top: 4px; background: var(--blue); border: 3px solid white; border-radius: 50%; box-shadow: 0 2px 7px rgba(30, 61, 90, 0.2); }
-.route-globe-itinerary .stopover i { background: var(--amber); }
-.route-globe-itinerary .destination i { background: #5c9b78; }
+.route-globe-itinerary i { position: relative; z-index: 1; width: 12px; height: 12px; margin-top: 4px; background: #ff4d4f; border: 3px solid white; border-radius: 50%; box-shadow: 0 2px 7px rgba(30, 61, 90, 0.2); }
+.route-globe-itinerary .stopover i { background: #ff9f43; }
+.route-globe-itinerary .destination i { background: #ffd43b; }
 .route-globe-itinerary span { min-width: 0; display: flex; align-items: baseline; gap: 7px; }
 .route-globe-itinerary strong { flex: none; color: var(--ink); font-size: 13px; letter-spacing: 0.01em; }
 .route-globe-itinerary small { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
