@@ -25,6 +25,7 @@ export type RoutePreferenceEvaluation = {
   routeId: string;
   interest: number;
   interestBonus?: number;
+  preferredCityAirports?: string[];
   directness: number;
   strongPreferencePenalty?: number;
   interestComponents: ScoreComponent[];
@@ -86,6 +87,7 @@ function clampScore(value: number) {
 }
 
 const SELECTED_STOPOVER_INTEREST_BONUS = 15;
+const AIRPORT_ONLY_STOPOVER_INTEREST_BONUS = 5;
 
 export function applyPreferenceEvaluations(
   routes: RankedRouteOption[],
@@ -106,11 +108,25 @@ export function applyPreferenceEvaluations(
     if (!evaluation) return [route];
     if (evaluation.hardConstraintViolated) return [];
     const baseInterest = clampScore(evaluation.interest);
-    const selectedStopover = route.scheduledStops.some(
-      (stop) => selectedAirports.has(stop.airport),
+    const preferredCityAirports = new Set(
+      (evaluation.preferredCityAirports ?? []).map(
+        (airport) => airport.trim().toUpperCase(),
+      ),
     );
+    const cityMatchBonus = route.scheduledStops.reduce((bonus, stop) => {
+      const airport = stop.airport.trim().toUpperCase();
+      if (!selectedAirports.has(airport) && !preferredCityAirports.has(airport)) {
+        return bonus;
+      }
+      return Math.max(
+        bonus,
+        stop.usableMinutes > 0
+          ? SELECTED_STOPOVER_INTEREST_BONUS
+          : AIRPORT_ONLY_STOPOVER_INTEREST_BONUS,
+      );
+    }, 0);
     const interest = clampScore(
-      baseInterest + (selectedStopover ? SELECTED_STOPOVER_INTEREST_BONUS : 0),
+      baseInterest + cityMatchBonus,
     );
     const interestBonus = interest - baseInterest;
     const directness = clampScore(evaluation.directness);

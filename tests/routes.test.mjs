@@ -840,6 +840,62 @@ test("selected stopover cities add a capped soft bonus to AI interest", () => {
   assert.equal(capped[0].preferenceEvaluation.interestBonus, 5);
 });
 
+test("preferred stopover cities keep only a small airport-only bonus", () => {
+  const source = scoreRoutes(
+    ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX"),
+  ).find((route) => route.scheduledStops.some((stop) => stop.airport === "NRT"));
+  assert.ok(source);
+  assert.ok(source.scheduledStops.some(
+    (stop) => stop.airport === "NRT" && stop.usableMinutes > 0,
+  ));
+  const [playable] = applyPreferenceEvaluations(
+    [source],
+    { price: 30, interest: 35, directness: 35 },
+    [{
+      routeId: source.id,
+      interest: 80,
+      preferredCityAirports: ["NRT"],
+      directness: 70,
+      interestComponents: [],
+      directnessComponents: [],
+      hardConstraintViolated: false,
+      matchedPreferences: [],
+      explanation: "Test evaluation.",
+    }],
+    true,
+  );
+  assert.equal(playable.scores.interest, 95);
+  assert.equal(playable.preferenceEvaluation.interestBonus, 15);
+
+  const route = {
+    ...source,
+    id: `${source.id}-no-usable-stopover`,
+    scheduledStops: source.scheduledStops.map((stop) => ({
+      ...stop,
+      usableMinutes: 0,
+    })),
+  };
+  const [ranked] = applyPreferenceEvaluations(
+    [route],
+    { price: 30, interest: 35, directness: 35 },
+    [{
+      routeId: route.id,
+      interest: 80,
+      preferredCityAirports: ["NRT"],
+      directness: 70,
+      interestComponents: [],
+      directnessComponents: [],
+      hardConstraintViolated: false,
+      matchedPreferences: [],
+      explanation: "Test evaluation.",
+    }],
+    true,
+  );
+
+  assert.equal(ranked.scores.interest, 85);
+  assert.equal(ranked.preferenceEvaluation.interestBonus, 5);
+});
+
 test("all four locales cover the interface and airports", () => {
   assert.deepEqual(LOCALE_OPTIONS.map((item) => item.code), ["zh", "en", "ko", "ja"]);
   const airportCodes = new Set(

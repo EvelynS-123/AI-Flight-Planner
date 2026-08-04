@@ -335,6 +335,7 @@ test("preference evaluator batches large route sets before requesting AI output"
             evaluations: prompt.candidates.map((candidate, index) => ({
               routeId: candidate.routeId,
               interest: 60 + index,
+              preferredCityAirports: ["NRT", "XXX"],
               directness: 70 + index,
               interestComponents: [{
                 label: "Interest match",
@@ -403,6 +404,7 @@ test("preference evaluator batches large route sets before requesting AI output"
       new Set(data.evaluations.map((evaluation) => evaluation.routeId)),
       new Set(candidates.map((candidate) => candidate.routeId)),
     );
+    assert.deepEqual(data.evaluations[0].preferredCityAirports, ["NRT"]);
     assert.equal(providerRequests.length, 3);
     assert.deepEqual(
       providerRequests
@@ -411,6 +413,12 @@ test("preference evaluator batches large route sets before requesting AI output"
       [3, 8, 8],
     );
     assert.match(providerRequests[0].messages[0].content, /same absolute scoring standard/i);
+    assert.match(
+      providerRequests[0].messages[0].content,
+      /usableMinutes <= 0.*airport-only.*no more than 20/i,
+    );
+    assert.match(providerRequests[0].messages[0].content, /usableMinutes > 0.*primary city-interest signal/i);
+    assert.match(providerRequests[0].messages[0].content, /positive preference fact.*preferredCityAirports/i);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.GLM_API_KEY;
