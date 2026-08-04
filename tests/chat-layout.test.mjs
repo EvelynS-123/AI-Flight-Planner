@@ -77,6 +77,8 @@ test("every displayed route receives a grounded pro con and verdict assessment",
   assert.match(routeFinderSource, /assessment\.proLabel/);
   assert.match(routeFinderSource, /assessment\.conLabel/);
   assert.match(routeFinderSource, /assessment\.verdict/);
+  assert.match(routeFinderSource, /FLIGHT_ASSESSMENT_TIMEOUT_MS = 8_000/);
+  assert.match(routeFinderSource, /window\.setTimeout\([\s\S]*finishWithFallback\(\)[\s\S]*controller\.abort\(\)/);
   assert.match(globalCssSource, /\.flight-assessment/);
 });
 

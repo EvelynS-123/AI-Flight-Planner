@@ -43,6 +43,8 @@ type LocaleGateState = "loading" | "selecting" | "ready";
 type PreferenceEvaluationState = "idle" | "loading" | "ready" | "error";
 type FlightAssessmentState = "idle" | "loading" | "ready";
 
+const FLIGHT_ASSESSMENT_TIMEOUT_MS = 8_000;
+
 function liveFlightOptionLabel(flight: FlightResult, locale: Locale): string {
   const [, time = ""] = flight.departureTime.split(" ");
   const flightNumber = flight.flightNumbers.join(" · ");
@@ -458,6 +460,18 @@ export default function RouteFinder() {
       return;
     }
     const controller = new AbortController();
+    let active = true;
+    const finishWithFallback = () => {
+      if (!active) return;
+      active = false;
+      window.clearTimeout(timeout);
+      setFlightAssessments(fallbackFlightAssessments(flightAssessmentCandidates));
+      setFlightAssessmentState("ready");
+    };
+    const timeout = window.setTimeout(() => {
+      finishWithFallback();
+      controller.abort();
+    }, FLIGHT_ASSESSMENT_TIMEOUT_MS);
     setFlightAssessments([]);
     setFlightAssessmentState("loading");
     void fetch("/api/flights/assess", {
@@ -468,20 +482,23 @@ export default function RouteFinder() {
     }).then(async (response) => {
       if (!response.ok) throw new Error("flight_assessment_failed");
       const data = await response.json() as { assessments?: unknown };
-      if (!controller.signal.aborted) {
-        setFlightAssessments(parseFlightAssessmentResponse(
-          data.assessments,
-          flightAssessmentCandidates,
-        ));
-        setFlightAssessmentState("ready");
-      }
+      const assessments = parseFlightAssessmentResponse(
+        data.assessments,
+        flightAssessmentCandidates,
+      );
+      if (!active) return;
+      active = false;
+      window.clearTimeout(timeout);
+      setFlightAssessments(assessments);
+      setFlightAssessmentState("ready");
     }).catch(() => {
-      if (!controller.signal.aborted) {
-        setFlightAssessments(fallbackFlightAssessments(flightAssessmentCandidates));
-        setFlightAssessmentState("ready");
-      }
+      finishWithFallback();
     });
-    return () => controller.abort();
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, [flightAssessmentCandidates, flightAssessmentSignature]);
 
   const resultSummary = useMemo(() => {
