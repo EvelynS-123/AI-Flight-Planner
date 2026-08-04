@@ -255,3 +255,50 @@ test("one selected multi-airport city still uses two exploration requests", asyn
     else process.env.SERPAPI_API_KEY = originalApiKey;
   }
 });
+
+test("required via-city search keeps a valid second-leg window for a single date", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.SERPAPI_API_KEY;
+  const calls = [];
+  process.env.SERPAPI_API_KEY = "required-via-date-test-key";
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return Response.json(serpPayload(String(url)));
+  };
+
+  try {
+    const response = await POST(new Request("http://local/api/flights/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        legs: [
+          { origins: ["MAD"], destinations: ["IST"] },
+          { origins: ["IST"], destinations: ["BKK"] },
+        ],
+        dateRangeStart: "2026-12-05",
+        dateRangeEnd: "2026-12-05",
+        tripType: "one_way",
+        cabinClass: "economy",
+        adults: 1,
+      }),
+    }));
+    const data = await response.json();
+    const datesByOrigin = Object.fromEntries(calls.map((urlString) => {
+      const url = new URL(urlString);
+      return [
+        url.searchParams.get("departure_id"),
+        url.searchParams.get("outbound_date"),
+      ];
+    }));
+
+    assert.equal(response.status, 200);
+    assert.equal(data.meta.providerRequests, 2);
+    assert.equal(datesByOrigin.MAD, "2026-12-05");
+    assert.equal(datesByOrigin.IST, "2026-12-06");
+    assert.ok(data.results.some((flight) => flight.isSelfTransfer));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.SERPAPI_API_KEY;
+    else process.env.SERPAPI_API_KEY = originalApiKey;
+  }
+});

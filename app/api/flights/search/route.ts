@@ -235,24 +235,17 @@ export async function POST(request: Request) {
 
   // 1. Process all legs in parallel
   const legResultsPromises = legsToProcess.map((leg: any, i: number) => {
-    // For subsequent legs, we ideally want to search dates after the first leg.
-    // For simplicity, we just use the same date range start/end for all in this demo,
-    // but in a real app, we'd adjust `dateRangeStart` based on previous leg's arrival.
-    // Alternatively, SerpAPI handles specific dates. We'll use the same dates here and filter by time later.
     let start = dateRangeStart || new Date().toISOString().split("T")[0];
+    let end = dateRangeEnd || start;
     if (i > 0) {
-      // Offset by i days roughly for mock/demo purposes
-      const d = new Date(start);
-      if (!isNaN(d.getTime())) {
-        d.setDate(d.getDate() + i);
-        start = d.toISOString().split("T")[0];
-      }
+      start = addIsoDays(start, i);
+      end = addIsoDays(end, i);
     }
     return searchSingleLeg(
       leg.origins,
       leg.destinations,
       start,
-      dateRangeEnd,
+      end,
       1,
       true,
       legsToProcess.length > 1,

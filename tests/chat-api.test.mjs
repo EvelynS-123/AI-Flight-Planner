@@ -70,6 +70,61 @@ test("chat retries once when the provider returns malformed JSON", async () => {
   }
 });
 
+test("search chat resolves contextual choices and obvious city typos without refusing", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalProvider = process.env.TRAVEL_AI_PROVIDER;
+  const originalKey = process.env.GLM_API_KEY;
+  process.env.TRAVEL_AI_PROVIDER = "glm";
+  process.env.GLM_API_KEY = "test-secret";
+  let providerRequest;
+  globalThis.fetch = async (_url, init) => {
+    providerRequest = JSON.parse(init.body);
+    return Response.json({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            searchReady: false,
+            reply: "What date would you like to leave for Taipei?",
+          }),
+        },
+      }],
+    });
+  };
+
+  try {
+    const response = await POST(new Request("http://local/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        locale: "en",
+        messages: [
+          { role: "user", content: "I want one stop on the way." },
+          { role: "assistant", content: "Would you prefer Tokyo or Taipei?" },
+          { role: "user", content: "the latter" },
+        ],
+      }),
+    }));
+    const data = await response.json();
+    const systemPrompt = providerRequest.messages[0].content;
+
+    assert.equal(response.status, 200);
+    assert.equal(data.reply, "What date would you like to leave for Taipei?");
+    assert.deepEqual(providerRequest.messages.slice(1, 3), [
+      { role: "user", content: "I want one stop on the way." },
+      { role: "assistant", content: "Would you prefer Tokyo or Taipei?" },
+    ]);
+    assert.match(systemPrompt, /former.*latter.*immediately preceding/i);
+    assert.match(systemPrompt, /obvious city.*misspell/i);
+    assert.match(systemPrompt, /do not refuse/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalProvider === undefined) delete process.env.TRAVEL_AI_PROVIDER;
+    else process.env.TRAVEL_AI_PROVIDER = originalProvider;
+    if (originalKey === undefined) delete process.env.GLM_API_KEY;
+    else process.env.GLM_API_KEY = originalKey;
+  }
+});
+
 test("preference chat uses natural interviewing and stores semantic preference facts", async () => {
   const keyNames = ["DEEPSEEK_API_KEY", "GLM_API_KEY", "KIMI_API_KEY"];
   const originals = Object.fromEntries(keyNames.map((key) => [key, process.env[key]]));
@@ -141,7 +196,7 @@ test("preference chat uses natural interviewing and stores semantic preference f
   }
 });
 
-test("preference evaluator applies arbitrary semantic rules to every route in one batch", async () => {
+test("preference evaluator applies arbitrary semantic rules to every route", async () => {
   const originalFetch = globalThis.fetch;
   const originalKey = process.env.GLM_API_KEY;
   const originalProvider = process.env.TRAVEL_AI_PROVIDER;
@@ -171,6 +226,7 @@ test("preference evaluator applies arbitrary semantic rules to every route in on
                   weight: 100,
                   reason: "The route is direct.",
                 }],
+                strongPreferencePenalty: 15,
                 hardConstraintViolated: false,
                 matchedPreferences: ["Dislikes airline names containing Air"],
                 explanation: "The airline name contains Air.",
@@ -191,6 +247,7 @@ test("preference evaluator applies arbitrary semantic rules to every route in on
                   weight: 100,
                   reason: "The route is direct.",
                 }],
+                strongPreferencePenalty: 0,
                 hardConstraintViolated: false,
                 matchedPreferences: ["Dislikes airline names containing Air"],
                 explanation: "The airline name does not contain Air.",
@@ -244,11 +301,116 @@ test("preference evaluator applies arbitrary semantic rules to every route in on
     assert.equal(response.status, 200);
     assert.equal(data.evaluations.length, 2);
     assert.equal(data.evaluations[0].interest, 10);
+    assert.equal(data.evaluations[0].strongPreferencePenalty, 15);
     assert.equal(data.evaluations[0].interestComponents[0].weight, 100);
     assert.match(providerRequest.messages[0].content, /fixed tag list/);
     assert.match(providerRequest.messages[0].content, /Component weights within each axis must sum to 100/);
+    assert.match(providerRequest.messages[0].content, /strongPreferencePenalty/);
     assert.match(providerRequest.messages.at(-1).content, /Example Air/);
     assert.match(providerRequest.messages.at(-1).content, /Nimbus/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.GLM_API_KEY;
+    else process.env.GLM_API_KEY = originalKey;
+    if (originalProvider === undefined) delete process.env.TRAVEL_AI_PROVIDER;
+    else process.env.TRAVEL_AI_PROVIDER = originalProvider;
+  }
+});
+
+test("preference evaluator batches large route sets before requesting AI output", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.GLM_API_KEY;
+  const originalProvider = process.env.TRAVEL_AI_PROVIDER;
+  process.env.TRAVEL_AI_PROVIDER = "glm";
+  process.env.GLM_API_KEY = "test-secret";
+  const providerRequests = [];
+  globalThis.fetch = async (_url, init) => {
+    const providerRequest = JSON.parse(init.body);
+    providerRequests.push(providerRequest);
+    const prompt = JSON.parse(providerRequest.messages.at(-1).content);
+    return Response.json({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            evaluations: prompt.candidates.map((candidate, index) => ({
+              routeId: candidate.routeId,
+              interest: 60 + index,
+              directness: 70 + index,
+              interestComponents: [{
+                label: "Interest match",
+                score: 60 + index,
+                weight: 100,
+                reason: "Matches the test preference.",
+              }],
+              directnessComponents: [{
+                label: "Route simplicity",
+                score: 70 + index,
+                weight: 100,
+                reason: "Uses the supplied route facts.",
+              }],
+              hardConstraintViolated: false,
+              matchedPreferences: ["Likes food and culture"],
+              explanation: "Test evaluation.",
+            })),
+          }),
+        },
+      }],
+    });
+  };
+  try {
+    const memory = {
+      version: 3,
+      mode: "personalized",
+      summary: "Likes food and culture.",
+      facts: [{
+        statement: "The user likes food and culture.",
+        scope: "experience",
+        axis: "interest",
+        polarity: "like",
+        strength: 5,
+        hardConstraint: false,
+        evidence: "The user stated this directly.",
+      }],
+    };
+    const candidates = Array.from({ length: 19 }, (_, index) => ({
+      routeId: `route-${index + 1}`,
+      origin: "PVG",
+      destination: "LAX",
+      ticketType: "connection",
+      stopCount: 1,
+      totalPrice: 500 + index,
+      totalDurationMinutes: 900 + index,
+      airlines: [{ code: "XX", name: "Example Airways" }],
+      departureLocal: "2026-09-01 10:00",
+      arrivalLocal: "2026-09-01 18:00",
+      stopovers: [{
+        airport: "NRT",
+        cityName: "Tokyo",
+        kind: "connection",
+        durationMinutes: 180,
+        usableMinutes: 0,
+      }],
+    }));
+    const response = await preferenceEvaluatePOST(new Request("http://local/api/preferences/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memory, candidates, locale: "en" }),
+    }));
+    const data = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(data.evaluations.length, 19);
+    assert.deepEqual(
+      new Set(data.evaluations.map((evaluation) => evaluation.routeId)),
+      new Set(candidates.map((candidate) => candidate.routeId)),
+    );
+    assert.equal(providerRequests.length, 3);
+    assert.deepEqual(
+      providerRequests
+        .map((request) => JSON.parse(request.messages.at(-1).content).candidates.length)
+        .sort((a, b) => a - b),
+      [3, 8, 8],
+    );
+    assert.match(providerRequests[0].messages[0].content, /same absolute scoring standard/i);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.GLM_API_KEY;

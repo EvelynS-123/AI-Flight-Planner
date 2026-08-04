@@ -24,7 +24,9 @@ export type PreferenceRouteCandidate = {
 export type RoutePreferenceEvaluation = {
   routeId: string;
   interest: number;
+  interestBonus?: number;
   directness: number;
+  strongPreferencePenalty?: number;
   interestComponents: ScoreComponent[];
   directnessComponents: ScoreComponent[];
   hardConstraintViolated: boolean;
@@ -83,29 +85,53 @@ function clampScore(value: number) {
   return Math.max(0, Math.min(100, value));
 }
 
+const SELECTED_STOPOVER_INTEREST_BONUS = 15;
+
 export function applyPreferenceEvaluations(
   routes: RankedRouteOption[],
   weights: RouteWeights,
   evaluations: RoutePreferenceEvaluation[] | null,
   personalized: boolean,
+  selectedStopoverAirports: readonly string[] = [],
 ): PreferenceRankedRoute[] {
-  if (!personalized) return routes;
-  const byRoute = new Map((evaluations ?? []).map((item) => [item.routeId, item]));
+  if (!personalized || !evaluations?.length) return routes;
+  const byRoute = new Map(evaluations.map((item) => [item.routeId, item]));
+  const selectedAirports = new Set(
+    selectedStopoverAirports.map((airport) => airport.trim().toUpperCase()),
+  );
   const totalWeights = weights.price + weights.interest + weights.directness || 1;
 
   return routes.flatMap((route) => {
     const evaluation = byRoute.get(route.id);
-    if (evaluation?.hardConstraintViolated) return [];
-    const interest = clampScore(evaluation?.interest ?? 50);
-    const directness = clampScore(evaluation?.directness ?? route.scores.directness);
-    const total = (
+    if (!evaluation) return [route];
+    if (evaluation.hardConstraintViolated) return [];
+    const baseInterest = clampScore(evaluation.interest);
+    const selectedStopover = route.scheduledStops.some(
+      (stop) => selectedAirports.has(stop.airport),
+    );
+    const interest = clampScore(
+      baseInterest + (selectedStopover ? SELECTED_STOPOVER_INTEREST_BONUS : 0),
+    );
+    const interestBonus = interest - baseInterest;
+    const directness = clampScore(evaluation.directness);
+    const strongPreferencePenalty = Math.max(
+      0,
+      Math.min(30, Number(evaluation.strongPreferencePenalty) || 0),
+    );
+    const weightedTotal = (
       route.scores.price * weights.price
       + interest * weights.interest
       + directness * weights.directness
     ) / totalWeights;
+    const total = clampScore(weightedTotal - strongPreferencePenalty);
     return [{
       ...route,
-      ...(evaluation ? { preferenceEvaluation: evaluation } : {}),
+      preferenceEvaluation: {
+        ...evaluation,
+        interest,
+        interestBonus,
+        strongPreferencePenalty,
+      },
       scores: {
         ...route.scores,
         interest,
