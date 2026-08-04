@@ -724,6 +724,122 @@ test("AI preference evaluations replace fixed preference scores and filter seman
   assert.equal(ranked[0].scores.airlineMatch, null);
 });
 
+test("strong soft preference penalties remain active when their slider axis is zero", () => {
+  const [base] = scoreRoutes(
+    ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX").slice(0, 1),
+  );
+  const evaluation = {
+    routeId: base.id,
+    interest: 80,
+    directness: 20,
+    strongPreferencePenalty: 15,
+    hardConstraintViolated: false,
+    matchedPreferences: ["Strongly dislikes late-night arrivals"],
+    explanation: "This route arrives late at night.",
+  };
+  const withoutPenalty = applyPreferenceEvaluations(
+    [base],
+    { price: 50, interest: 50, directness: 0 },
+    [{ ...evaluation, strongPreferencePenalty: 0 }],
+    true,
+  );
+  const withPenalty = applyPreferenceEvaluations(
+    [base],
+    { price: 50, interest: 50, directness: 0 },
+    [evaluation],
+    true,
+  );
+
+  assert.equal(
+    withoutPenalty[0].scores.total - withPenalty[0].scores.total,
+    15,
+  );
+  assert.equal(withPenalty[0].preferenceEvaluation.strongPreferencePenalty, 15);
+});
+
+test("personalized routes keep their existing scores until AI evaluations are complete", () => {
+  const base = scoreRoutes(
+    ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX").slice(0, 2),
+  );
+  const pending = applyPreferenceEvaluations(
+    base,
+    { price: 30, interest: 35, directness: 35 },
+    null,
+    true,
+  );
+  assert.deepEqual(pending, base);
+
+  const partial = applyPreferenceEvaluations(
+    base,
+    { price: 30, interest: 35, directness: 35 },
+    [{
+      routeId: base[0].id,
+      interest: 92,
+      directness: 84,
+      hardConstraintViolated: false,
+      matchedPreferences: ["Enjoys food"],
+      explanation: "Strong match.",
+    }],
+    true,
+  );
+  assert.equal(partial[0].scores.interest, 92);
+  assert.deepEqual(partial[1], base[1]);
+});
+
+test("selected stopover cities add a capped soft bonus to AI interest", () => {
+  const allRoutes = scoreRoutes(
+    ROUTES.filter((route) => route.origin === "PVG" && route.destination === "LAX"),
+  );
+  const base = [
+    allRoutes.find((route) => route.scheduledStops.some((stop) => stop.airport === "NRT")),
+    allRoutes.find((route) => (
+      route.scheduledStops.length > 0
+      && route.scheduledStops.every((stop) => stop.airport !== "NRT")
+    )),
+  ];
+  assert.ok(base.every(Boolean));
+  const evaluations = base.map((route, index) => ({
+    routeId: route.id,
+    interest: index === 0 ? 80 : 60,
+    directness: 70,
+    interestComponents: [],
+    directnessComponents: [],
+    hardConstraintViolated: false,
+    matchedPreferences: [],
+    explanation: "Test evaluation.",
+  }));
+  const withoutSelection = applyPreferenceEvaluations(
+    base,
+    { price: 30, interest: 35, directness: 35 },
+    evaluations,
+    true,
+  );
+  const withSelection = applyPreferenceEvaluations(
+    base,
+    { price: 30, interest: 35, directness: 35 },
+    evaluations,
+    true,
+    ["HND", "NRT"],
+  );
+
+  assert.equal(withSelection[0].scores.interest, 95);
+  assert.equal(withSelection[0].preferenceEvaluation.interestBonus, 15);
+  assert.equal(withSelection[1].scores.interest, 60);
+  assert.equal(withSelection[1].preferenceEvaluation.interestBonus, 0);
+  assert.equal(withSelection[0].scores.total - withoutSelection[0].scores.total, 5.25);
+  assert.equal(withSelection[1].scores.total, withoutSelection[1].scores.total);
+
+  const capped = applyPreferenceEvaluations(
+    [base[0]],
+    { price: 30, interest: 35, directness: 35 },
+    [{ ...evaluations[0], interest: 95 }],
+    true,
+    ["NRT"],
+  );
+  assert.equal(capped[0].scores.interest, 100);
+  assert.equal(capped[0].preferenceEvaluation.interestBonus, 5);
+});
+
 test("all four locales cover the interface and airports", () => {
   assert.deepEqual(LOCALE_OPTIONS.map((item) => item.code), ["zh", "en", "ko", "ja"]);
   const airportCodes = new Set(

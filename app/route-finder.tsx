@@ -32,6 +32,7 @@ import {
 
 type LiveSearchContext = Record<string, unknown>;
 type LocaleGateState = "loading" | "selecting" | "ready";
+type PreferenceEvaluationState = "idle" | "loading" | "ready" | "error";
 
 function liveFlightOptionLabel(flight: FlightResult, locale: Locale): string {
   const [, time = ""] = flight.departureTime.split(" ");
@@ -248,6 +249,7 @@ function scoreDetailCopy(locale: Locale) {
     price: "相对价格",
     priceReason: "根据当前候选航线中的价格位置计算",
     interest: "AI 偏好匹配",
+    selectedStopover: "已选中转城市",
     directness: "AI 直接度匹配",
   };
   if (locale === "ko") return {
@@ -258,6 +260,7 @@ function scoreDetailCopy(locale: Locale) {
     price: "상대 가격",
     priceReason: "현재 후보 항공편의 가격 범위에서 계산",
     interest: "AI 취향 일치",
+    selectedStopover: "선택한 경유 도시",
     directness: "AI 직행성 일치",
   };
   if (locale === "ja") return {
@@ -268,6 +271,7 @@ function scoreDetailCopy(locale: Locale) {
     price: "相対価格",
     priceReason: "現在の候補ルート内での価格位置から計算",
     interest: "AI 好み一致度",
+    selectedStopover: "選択した乗り継ぎ都市",
     directness: "AI 直行性一致度",
   };
   return {
@@ -278,7 +282,27 @@ function scoreDetailCopy(locale: Locale) {
     price: "Relative price",
     priceReason: "Calculated from its price position among the current routes",
     interest: "AI preference match",
+    selectedStopover: "Selected stopover city",
     directness: "AI directness match",
+  };
+}
+
+function preferenceEvaluationCopy(locale: Locale) {
+  if (locale === "zh") return {
+    loading: "AI 正在生成个性化评分…",
+    error: "个性化评分失败，请稍后重试。",
+  };
+  if (locale === "ko") return {
+    loading: "AI가 개인화 점수를 계산하고 있습니다…",
+    error: "개인화 점수를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  };
+  if (locale === "ja") return {
+    loading: "AIがパーソナライズ評価を計算中です…",
+    error: "パーソナライズ評価を取得できませんでした。しばらくしてからもう一度お試しください。",
+  };
+  return {
+    loading: "AI is calculating your personalized scores…",
+    error: "Personalized scoring failed. Please try again later.",
   };
 }
 
@@ -287,6 +311,7 @@ function ScoreDetail({
   total,
   overallWeight,
   components,
+  bonus = 0,
   locale,
   tooltipId,
 }: {
@@ -294,6 +319,7 @@ function ScoreDetail({
   total: number;
   overallWeight: number;
   components: ScoreComponent[];
+  bonus?: number;
   locale: Locale;
   tooltipId: string;
 }) {
@@ -317,6 +343,12 @@ function ScoreDetail({
               {component.reason && <p>{component.reason}</p>}
             </div>
           ))}
+          {bonus > 0 && (
+            <div className="score-bonus">
+              <span>{detailCopy.selectedStopover}</span>
+              <strong>+{bonus}</strong>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -333,6 +365,7 @@ export default function RouteFinder() {
   const [stopoverSelections, setStopoverSelections] = useState<StopoverSelections>({});
   const [travelPreferences, setTravelPreferences] = useState<TravelPreferenceState | null>(null);
   const [preferenceEvaluations, setPreferenceEvaluations] = useState<RoutePreferenceEvaluation[] | null>(null);
+  const [preferenceEvaluationState, setPreferenceEvaluationState] = useState<PreferenceEvaluationState>("idle");
   const [quizOpen, setQuizOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
@@ -382,6 +415,15 @@ export default function RouteFinder() {
     () => new Map((liveFlightGroups ?? []).map((group) => [group.id, group])),
     [liveFlightGroups],
   );
+  const selectedExplorationAirports = useMemo(() => {
+    const groups = liveSearchContext?.explorationHubs;
+    if (!Array.isArray(groups)) return [];
+    return Array.from(new Set(groups.flatMap((group) => (
+      typeof group === "string"
+        ? group.split(",").map((airport) => airport.trim().toUpperCase())
+        : []
+    )).filter((airport) => /^[A-Z]{3}$/.test(airport))));
+  }, [liveSearchContext]);
   const liveAirportNames = useMemo(() => {
     const names: Record<string, string> = {};
     for (const group of liveFlightGroups ?? []) {
@@ -413,10 +455,12 @@ export default function RouteFinder() {
       && travelPreferences.facts.length > 0;
     if (!personalized || preferenceCandidateSignature === "[]") {
       setPreferenceEvaluations(null);
+      setPreferenceEvaluationState("idle");
       return;
     }
     const controller = new AbortController();
     setPreferenceEvaluations(null);
+    setPreferenceEvaluationState("loading");
     void fetch("/api/preferences/evaluate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -431,9 +475,13 @@ export default function RouteFinder() {
       const data = await response.json() as { evaluations?: RoutePreferenceEvaluation[] };
       if (!controller.signal.aborted) {
         setPreferenceEvaluations(Array.isArray(data.evaluations) ? data.evaluations : null);
+        setPreferenceEvaluationState("ready");
       }
     }).catch(() => {
-      if (!controller.signal.aborted) setPreferenceEvaluations(null);
+      if (!controller.signal.aborted) {
+        setPreferenceEvaluations(null);
+        setPreferenceEvaluationState("error");
+      }
     });
     return () => controller.abort();
   }, [preferenceCandidateSignature, travelPreferences, locale]);
@@ -444,13 +492,14 @@ export default function RouteFinder() {
       weights,
       preferenceEvaluations,
       travelPreferences?.mode === "personalized",
+      selectedExplorationAirports,
     );
     if (isDraggingWeights && dragOrder.current) {
       const positions = new Map(dragOrder.current.map((id, index) => [id, index]));
       return scored.sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
     }
     return scored.sort((a, b) => b.scores.total - a.scores.total || (a.total ?? Number.MAX_SAFE_INTEGER) - (b.total ?? Number.MAX_SAFE_INTEGER));
-  }, [baseResults, weights, preferenceEvaluations, travelPreferences?.mode, isDraggingWeights]);
+  }, [baseResults, weights, preferenceEvaluations, travelPreferences?.mode, selectedExplorationAirports, isDraggingWeights]);
 
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
@@ -1028,6 +1077,14 @@ export default function RouteFinder() {
               <div className="weight-intro">
                 <div><span>{copy.weightTitle}</span><strong>100%</strong></div>
                 <p>{copy.weightHelp}</p>
+                {(preferenceEvaluationState === "loading" || preferenceEvaluationState === "error") && (
+                  <p
+                    className={`preference-evaluation-status ${preferenceEvaluationState}`}
+                    role={preferenceEvaluationState === "error" ? "alert" : "status"}
+                  >
+                    {preferenceEvaluationCopy(locale)[preferenceEvaluationState]}
+                  </p>
+                )}
               </div>
               <div className="allocation-control">
                 <div className="allocation-stage">
@@ -1402,6 +1459,7 @@ export default function RouteFinder() {
                             total={route.scores.interest}
                             overallWeight={weights.interest}
                             components={interestComponents}
+                            bonus={route.preferenceEvaluation?.interestBonus}
                             locale={locale}
                             tooltipId={`${route.id}-interest-breakdown`}
                           />

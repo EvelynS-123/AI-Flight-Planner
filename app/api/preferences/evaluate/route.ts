@@ -8,6 +8,9 @@ import { sanitizeTravelPreferences } from "../../../travel-preferences.ts";
 
 export const runtime = "nodejs";
 
+const EVALUATION_BATCH_SIZE = 8;
+const EVALUATION_CONCURRENCY = 3;
+
 function cleanText(value: unknown, maximumLength: number) {
   return typeof value === "string"
     ? value.replace(/\s+/g, " ").trim().slice(0, maximumLength)
@@ -120,12 +123,16 @@ function cleanEvaluations(
     if (!candidateIds.has(routeId)) continue;
     const interestComponents = cleanComponents(candidate.interestComponents);
     const directnessComponents = cleanComponents(candidate.directnessComponents);
+    const strongPreferencePenalty = Number(candidate.strongPreferencePenalty);
     byRoute.set(routeId, {
       routeId,
       interest: weightedScore(interestComponents, candidate.interest),
       directness: weightedScore(directnessComponents, candidate.directness),
       interestComponents,
       directnessComponents,
+      strongPreferencePenalty: Number.isFinite(strongPreferencePenalty)
+        ? Math.max(0, Math.min(30, strongPreferencePenalty))
+        : 0,
       hardConstraintViolated: candidate.hardConstraintViolated === true,
       matchedPreferences: Array.isArray(candidate.matchedPreferences)
         ? candidate.matchedPreferences
@@ -158,13 +165,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const systemPrompt = `You evaluate a complete set of candidate flight routes against structured user preference memory.
+    const systemPrompt = `You evaluate a batch of candidate flight routes against structured user preference memory.
 Do not browse or request web data. Use your own stable geographic and travel knowledge for destination character, and use the supplied candidate facts as authoritative for airlines, schedules, stops, durations, and prices.
 
 Apply every preference fact semantically. Do not rely on a fixed tag list or predefined preference rules. This includes unusual rules such as disliking airlines whose names contain a certain word.
 - interest measures match with destination-experience and airline facts.
 - directness measures route simplicity, duration, connection burden, schedule, and comfort fit. Do not include price.
-- Compare candidates consistently as one set.
+- Use the same absolute scoring standard for every route. Do not change the scale based on which candidates appear in this batch.
 - Break interest and directness into understandable components. Give each component its own score and percentage weight.
 - Component weights within each axis must sum to 100. The weighted component average must equal the axis score.
 - Choose component labels from the actual preference facts and route qualities instead of a fixed component list.
@@ -172,6 +179,7 @@ Apply every preference fact semantically. Do not rely on a fixed tag list or pre
 - A direct route has no stopover experience, but its airline may still affect interest.
 - Mark hardConstraintViolated true only when an explicit hardConstraint fact is clearly violated.
 - Soft dislikes lower the relevant score but never filter a route.
+- Strong soft dislikes and avoids must also remain meaningful outside the manual axis sliders. For each clearly violated non-hard dislike or avoid fact, add 10 points to strongPreferencePenalty when its strength is 4 and 15 points when its strength is 5. Sum multiple violations, capped at 30. Use 0 when no such fact is clearly violated.
 - Do not invent airline names, flight times, stops, or route mechanics.
 - Keep explanations concise and grounded in the memory and supplied facts.
 
@@ -181,6 +189,7 @@ Return only JSON:
     "routeId": "exact supplied routeId",
     "interest": 0,
     "directness": 0,
+    "strongPreferencePenalty": 0,
     "interestComponents": [{
       "label": "specific preference or route quality",
       "score": 0,
@@ -200,25 +209,50 @@ Return only JSON:
 }
 Return exactly one evaluation for every supplied routeId. Scores range from 0 to 100.`;
 
-    const result = await provider.generateJson({
-      purpose: "planning",
-      systemPrompt,
-      userPrompt: JSON.stringify({
-        memory: {
-          summary: memory.summary,
-          facts: memory.facts,
-        },
-        candidates,
-        responseLanguage: cleanText(body.locale, 12) || "en",
-      }),
-    }) as Record<string, unknown>;
-    const evaluations = cleanEvaluations(
-      result.evaluations,
-      new Set(candidates.map((candidate) => candidate.routeId)),
+    const batches = Array.from(
+      { length: Math.ceil(candidates.length / EVALUATION_BATCH_SIZE) },
+      (_, index) => candidates.slice(
+        index * EVALUATION_BATCH_SIZE,
+        (index + 1) * EVALUATION_BATCH_SIZE,
+      ),
     );
-    if (evaluations.length !== candidates.length) {
-      throw new Error("Preference AI did not evaluate every route.");
-    }
+    const evaluatedBatches: RoutePreferenceEvaluation[][] = Array.from(
+      { length: batches.length },
+      () => [],
+    );
+    let nextBatchIndex = 0;
+    const evaluateNextBatch = async () => {
+      while (nextBatchIndex < batches.length) {
+        const batchIndex = nextBatchIndex;
+        nextBatchIndex += 1;
+        const batch = batches[batchIndex];
+        const result = await provider.generateJson({
+          purpose: "planning",
+          systemPrompt,
+          userPrompt: JSON.stringify({
+            memory: {
+              summary: memory.summary,
+              facts: memory.facts,
+            },
+            candidates: batch,
+            responseLanguage: cleanText(body.locale, 12) || "en",
+          }),
+        }) as Record<string, unknown>;
+        const evaluations = cleanEvaluations(
+          result.evaluations,
+          new Set(batch.map((candidate) => candidate.routeId)),
+        );
+        if (evaluations.length !== batch.length) {
+          throw new Error(`Preference AI did not evaluate every route in batch ${batchIndex + 1}.`);
+        }
+        evaluatedBatches[batchIndex] = evaluations;
+      }
+    };
+    await Promise.all(Array.from(
+      { length: Math.min(EVALUATION_CONCURRENCY, batches.length) },
+      () => evaluateNextBatch(),
+    ));
+    const evaluations = evaluatedBatches.flat();
     return Response.json({ evaluations });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Preference evaluation failed.";
