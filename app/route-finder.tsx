@@ -13,6 +13,7 @@ import {
 import { durationLabel, operatingDayNumbers, type StopoverSelections } from "./flight-schedules";
 import { COPY, LOCALE_OPTIONS, airportCity, localizeDateLabel, type Copy, type Locale } from "./i18n";
 import AITravelWorkspace from "./ai-travel-workspace";
+import RouteGlobe from "./route-globe";
 import { FlightChat } from "./flight-chat";
 import PreferenceChat from "./preference-chat";
 import type { FlightResult } from "./flight-results";
@@ -334,6 +335,7 @@ export default function RouteFinder() {
   const [preferenceEvaluations, setPreferenceEvaluations] = useState<RoutePreferenceEvaluation[] | null>(null);
   const [quizOpen, setQuizOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [closingRouteId, setClosingRouteId] = useState<string | null>(null);
   const [aiRouteId, setAiRouteId] = useState<string | null>(null);
   const [aiOriginRect, setAiOriginRect] = useState<DOMRect | null>(null);
@@ -456,6 +458,9 @@ export default function RouteFinder() {
     return copy.routeSummary(results.length, counts.direct, counts.connection, counts["multi-city"]);
   }, [results, copy]);
   const aiRoute = results.find((route) => route.id === aiRouteId) ?? null;
+  const selectedRoute = results.find((route) => route.id === selectedRouteId)
+    ?? results[0]
+    ?? null;
   const handlesAreColliding = weights.interest <= 4;
 
   useLayoutEffect(() => {
@@ -742,6 +747,7 @@ export default function RouteFinder() {
 
   async function toggleRoute(routeId: string, isOpen: boolean) {
     const switchToken = ++routeSwitchToken.current;
+    setSelectedRouteId(routeId);
     if (closingTimer.current) clearTimeout(closingTimer.current);
     if (isOpen) {
       setClosingRouteId(routeId);
@@ -1095,6 +1101,7 @@ export default function RouteFinder() {
               ))}
             </div>
           ) : (
+            <div className="route-results-layout">
             <div className="route-list">
               {results.map((route, index) => {
                 const isOpen = expanded === route.id;
@@ -1149,7 +1156,7 @@ export default function RouteFinder() {
                   }];
                 return (
                   <div className="route-motion" key={route.id} ref={(element) => { if (element) cardRefs.current.set(route.id, element); else cardRefs.current.delete(route.id); }}>
-                  <article className={`route-card ${isOpen ? "open" : ""}`}>
+                  <article className={`route-card ${isOpen ? "open" : ""} ${selectedRoute?.id === route.id ? "globe-selected" : ""}`}>
                     <button className="route-summary" type="button" onClick={() => toggleRoute(route.id, isOpen)} aria-expanded={isOpen}>
                       <div className="rank">{index + 1}</div>
                       <div className="route-main">
@@ -1413,6 +1420,12 @@ export default function RouteFinder() {
                   </div>
                 );
               })}
+            </div>
+            {selectedRoute && (
+              <div className="route-globe-sticky">
+                <RouteGlobe route={selectedRoute} locale={locale} />
+              </div>
+            )}
             </div>
           )}
         </section>

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const routeFinderSource = await readFile(new URL("../app/route-finder.tsx", import.meta.url), "utf8");
+const routeGlobeSource = await readFile(new URL("../app/route-globe.tsx", import.meta.url), "utf8");
 const flightChatSource = await readFile(new URL("../app/flight-chat.tsx", import.meta.url), "utf8");
 const globalCssSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 const preferenceChatSource = await readFile(new URL("../app/preference-chat.tsx", import.meta.url), "utf8");
@@ -10,6 +11,9 @@ const preferenceChatApiSource = await readFile(new URL("../app/api/preferences/c
 const chatApiSource = await readFile(new URL("../app/api/chat/route.ts", import.meta.url), "utf8");
 const hubCharacteristicsSource = await readFile(new URL("../app/api/chat/hub-characteristics/route.ts", import.meta.url), "utf8");
 const flightSearchApiSource = await readFile(new URL("../app/api/flights/search/route.ts", import.meta.url), "utf8");
+const airportMapData = JSON.parse(await readFile(new URL("../public/map/airport-map-data.json", import.meta.url), "utf8"));
+const routeCountries = JSON.parse(await readFile(new URL("../public/map/route-countries.geojson", import.meta.url), "utf8"));
+const localizedAirportNames = JSON.parse(await readFile(new URL("../app/data/airport-localized-names.json", import.meta.url), "utf8"));
 
 test("chatbot replaces the legacy origin destination and month search form", () => {
   assert.doesNotMatch(routeFinderSource, /className="search-card"/);
@@ -79,6 +83,52 @@ test("AI thinking and route search expose accessible request-bound loading state
   assert.match(flightChatSource, /loading && phase === "chat"[\s\S]*className="chat-searching chat-thinking" role="status"/);
   assert.match(routeFinderSource, /aria-busy=\{isLoading\}[\s\S]*isLoading && \([\s\S]*className="route-search-loader" role="status"/);
   assert.match(globalCssSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.route-search-plane/);
+});
+
+test("selected routes update a draggable satellite globe below the weight panel", () => {
+  assert.match(routeFinderSource, /setSelectedRouteId\(routeId\)/);
+  assert.match(routeFinderSource, /className="route-results-layout"/);
+  assert.match(routeFinderSource, /<RouteGlobe route=\{selectedRoute\} locale=\{locale\}/);
+  assert.match(routeGlobeSource, /dynamic\(\(\) => import\("react-globe\.gl"\), \{ ssr: false \}\)/);
+  assert.match(routeGlobeSource, /globeImageUrl="\/map\/earth-blue-marble\.jpg"/);
+  assert.match(routeGlobeSource, /polygonsData=\{countries\}/);
+  assert.match(routeGlobeSource, /routeCountries\.has/);
+  assert.match(routeGlobeSource, /function routeFlightLegs/);
+  assert.match(routeGlobeSource, /const ARC_ALTITUDE = 0\.18/);
+  assert.match(routeGlobeSource, /arcAltitude=\{ARC_ALTITUDE\}/);
+  assert.match(routeGlobeSource, /fetch\("\/map\/airport-map-data\.json"/);
+  assert.match(routeGlobeSource, /fetch\("\/map\/route-countries\.geojson"/);
+  assert.match(routeGlobeSource, /controls\.enableZoom = false/);
+  assert.doesNotMatch(routeGlobeSource, /zoomGlobe|route-globe-zoom|滚轮缩放/);
+  assert.doesNotMatch(globalCssSource, /\.route-globe-zoom/);
+  assert.match(routeGlobeSource, /role="img"/);
+  assert.match(routeFinderSource, /className="route-results-layout"[\s\S]*className="route-globe-sticky"[\s\S]*<RouteGlobe/);
+  assert.doesNotMatch(routeFinderSource, /<\/main>[\s\S]*<RouteGlobe/);
+  assert.match(globalCssSource, /\.route-globe-sticky \{ position: sticky; top: 16px/);
+  assert.match(globalCssSource, /\.planner \{[^}]*overflow: clip/);
+  assert.doesNotMatch(globalCssSource, /route-globe-viewport-dock|route-globe-space/);
+  assert.match(globalCssSource, /@media \(max-width: 900px\)[\s\S]*\.route-globe-sticky \{ position: static/);
+  assert.match(globalCssSource, /\.route-globe-dock-toggle/);
+});
+
+test("the route globe has coordinates and country codes for every localized airport", () => {
+  assert.ok(Object.keys(airportMapData).length >= Object.keys(localizedAirportNames).length);
+  for (const code of Object.keys(localizedAirportNames)) {
+    const airport = airportMapData[code];
+    assert.equal(airport?.length, 3, `${code} should have latitude, longitude, and country`);
+    assert.ok(Number.isFinite(airport[0]) && airport[0] >= -90 && airport[0] <= 90);
+    assert.ok(Number.isFinite(airport[1]) && airport[1] >= -180 && airport[1] <= 180);
+    assert.match(airport[2], /^[A-Z]{2}$/);
+  }
+});
+
+test("the local country overlay contains strategy-map polygons", () => {
+  assert.equal(routeCountries.type, "FeatureCollection");
+  assert.ok(routeCountries.features.length >= 170);
+  for (const feature of routeCountries.features) {
+    assert.match(feature.properties.country, /^[A-Z]{2}$/);
+    assert.ok(["Polygon", "MultiPolygon"].includes(feature.geometry.type));
+  }
 });
 
 test("grouped live results expose one inline date and time selector", () => {
