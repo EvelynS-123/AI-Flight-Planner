@@ -28,10 +28,20 @@ import {
   preferenceCandidateForRoute,
   type RoutePreferenceEvaluation,
 } from "./preference-evaluation";
+import {
+  buildFlightAssessmentCandidates,
+  fallbackFlightAssessments,
+  flightAssessmentLoadingCopy,
+  flightAssessmentRouteInput,
+  flightAssessmentView,
+  parseFlightAssessmentResponse,
+  type FlightAssessmentSelection,
+} from "./flight-assessment";
 
 type LiveSearchContext = Record<string, unknown>;
 type LocaleGateState = "loading" | "selecting" | "ready";
 type PreferenceEvaluationState = "idle" | "loading" | "ready" | "error";
+type FlightAssessmentState = "idle" | "loading" | "ready";
 
 function liveFlightOptionLabel(flight: FlightResult, locale: Locale): string {
   const [, time = ""] = flight.departureTime.split(" ");
@@ -279,6 +289,8 @@ export default function RouteFinder() {
   const [travelPreferences, setTravelPreferences] = useState<TravelPreferenceState | null>(null);
   const [preferenceEvaluations, setPreferenceEvaluations] = useState<RoutePreferenceEvaluation[] | null>(null);
   const [preferenceEvaluationState, setPreferenceEvaluationState] = useState<PreferenceEvaluationState>("idle");
+  const [flightAssessments, setFlightAssessments] = useState<FlightAssessmentSelection[]>([]);
+  const [flightAssessmentState, setFlightAssessmentState] = useState<FlightAssessmentState>("idle");
   const [quizOpen, setQuizOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
@@ -413,6 +425,64 @@ export default function RouteFinder() {
     }
     return scored.sort((a, b) => b.scores.total - a.scores.total || (a.total ?? Number.MAX_SAFE_INTEGER) - (b.total ?? Number.MAX_SAFE_INTEGER));
   }, [baseResults, weights, preferenceEvaluations, travelPreferences?.mode, selectedExplorationAirports, isDraggingWeights]);
+
+  const flightAssessmentRoutes = useMemo(
+    () => searched && !isLoading
+      ? results
+        .map(flightAssessmentRouteInput)
+        .sort((left, right) => left.routeId.localeCompare(right.routeId))
+      : [],
+    [searched, isLoading, results],
+  );
+  const flightAssessmentSignature = useMemo(
+    () => JSON.stringify(flightAssessmentRoutes),
+    [flightAssessmentRoutes],
+  );
+  const flightAssessmentCandidates = useMemo(
+    () => buildFlightAssessmentCandidates(JSON.parse(flightAssessmentSignature)),
+    [flightAssessmentSignature],
+  );
+  const flightAssessmentCandidateById = useMemo(
+    () => new Map(flightAssessmentCandidates.map((candidate) => [candidate.routeId, candidate])),
+    [flightAssessmentCandidates],
+  );
+  const flightAssessmentById = useMemo(
+    () => new Map(flightAssessments.map((assessment) => [assessment.routeId, assessment])),
+    [flightAssessments],
+  );
+
+  useEffect(() => {
+    if (!flightAssessmentCandidates.length) {
+      setFlightAssessments([]);
+      setFlightAssessmentState("idle");
+      return;
+    }
+    const controller = new AbortController();
+    setFlightAssessments([]);
+    setFlightAssessmentState("loading");
+    void fetch("/api/flights/assess", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({ routes: JSON.parse(flightAssessmentSignature) }),
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("flight_assessment_failed");
+      const data = await response.json() as { assessments?: unknown };
+      if (!controller.signal.aborted) {
+        setFlightAssessments(parseFlightAssessmentResponse(
+          data.assessments,
+          flightAssessmentCandidates,
+        ));
+        setFlightAssessmentState("ready");
+      }
+    }).catch(() => {
+      if (!controller.signal.aborted) {
+        setFlightAssessments(fallbackFlightAssessments(flightAssessmentCandidates));
+        setFlightAssessmentState("ready");
+      }
+    });
+    return () => controller.abort();
+  }, [flightAssessmentCandidates, flightAssessmentSignature]);
 
   const resultSummary = useMemo(() => {
     const counts = { direct: 0, connection: 0, "multi-city": 0 };
@@ -1101,6 +1171,11 @@ export default function RouteFinder() {
                   : undefined;
                 const hasInternalConnections = route.ticketType === "multi-city"
                   && route.scheduledStops.some((stop) => stop.kind === "connection");
+                const assessmentCandidate = flightAssessmentCandidateById.get(route.id);
+                const assessmentSelection = flightAssessmentById.get(route.id);
+                const assessment = assessmentCandidate && assessmentSelection
+                  ? flightAssessmentView(assessmentCandidate, assessmentSelection, locale)
+                  : null;
                 return (
                   <div className="route-motion" key={route.id} ref={(element) => { if (element) cardRefs.current.set(route.id, element); else cardRefs.current.delete(route.id); }}>
                   <article className={`route-card ${isOpen ? "open" : ""} ${selectedRoute?.id === route.id ? "globe-selected" : ""}`}>
@@ -1160,6 +1235,25 @@ export default function RouteFinder() {
                       </div>
                       <span className="disclosure" aria-hidden="true">⌄</span>
                     </button>
+
+                    {flightAssessmentState === "loading" && assessmentCandidate ? (
+                      <div className="flight-assessment loading" role="status">
+                        <span className="assessment-mark" aria-hidden="true">✦</span>
+                        <p>{flightAssessmentLoadingCopy(locale)}</p>
+                      </div>
+                    ) : assessment ? (
+                      <div className="flight-assessment" aria-live="polite">
+                        <span className="assessment-mark" aria-hidden="true">✦</span>
+                        <div>
+                          <strong>{assessment.title}</strong>
+                          <dl>
+                            <div><dt>{assessment.proLabel}</dt><dd>{assessment.pro}</dd></div>
+                            <div><dt>{assessment.conLabel}</dt><dd>{assessment.con}</dd></div>
+                          </dl>
+                          <p>{assessment.verdict}</p>
+                        </div>
+                      </div>
+                    ) : null}
 
                     <div className="route-details" aria-hidden={!isOpen}>
                       {keepDetailsMounted && <div className="details-inner" inert={!isOpen}>

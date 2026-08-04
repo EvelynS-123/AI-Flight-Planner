@@ -70,6 +70,16 @@ test("route details keep only three scores without a hover breakdown", () => {
   assert.doesNotMatch(globalCssSource, /\.score-tooltip|\.score-component|\.score-bonus/);
 });
 
+test("every displayed route receives a grounded pro con and verdict assessment", () => {
+  assert.match(routeFinderSource, /buildFlightAssessmentCandidates/);
+  assert.match(routeFinderSource, /fetch\("\/api\/flights\/assess"/);
+  assert.match(routeFinderSource, /className="flight-assessment"/);
+  assert.match(routeFinderSource, /assessment\.proLabel/);
+  assert.match(routeFinderSource, /assessment\.conLabel/);
+  assert.match(routeFinderSource, /assessment\.verdict/);
+  assert.match(globalCssSource, /\.flight-assessment/);
+});
+
 test("chat component remains mounted while its interface is collapsed", () => {
   assert.match(routeFinderSource, /<div className="assistant-search-panel" hidden=\{!isChatOpen\}>[\s\S]*<FlightChat/);
   assert.match(routeFinderSource, /!isChatOpen && !isLoading && \([\s\S]*className="assistant-reopen"/);
