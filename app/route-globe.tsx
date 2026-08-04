@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { GlobeMethods } from "react-globe.gl";
 import type { RankedRouteOption } from "./flight-schedules";
 import { airportCity, type Locale } from "./i18n";
+import { equalApexArcAltitude } from "./route-globe-geometry";
 
 const InteractiveGlobe = dynamic(() => import("react-globe.gl"), { ssr: false });
 
@@ -20,6 +21,7 @@ type RoutePoint = {
   lng: number;
 };
 type RouteArc = {
+  altitude: number;
   from: string;
   to: string;
   startLat: number;
@@ -35,12 +37,16 @@ type CountryFeature = {
 type CountryCollection = { type: "FeatureCollection"; features: CountryFeature[] };
 
 const EMPTY_AIRPORTS: Record<string, AirportMapEntry> = {};
-const ORIGIN_COLOR = "#58b9e6";
-const STOPOVER_COLOR = "#f2ae49";
-const DESTINATION_COLOR = "#6bc08d";
-const ROUTE_COUNTRY_COLOR = "rgba(74, 171, 222, 0.34)";
-const ROUTE_COUNTRY_BORDER = "rgba(255, 218, 124, 0.92)";
-const ARC_ALTITUDE = 0.18;
+const ROUTE_START_COLOR = "#ff4d4f";
+const ROUTE_END_COLOR = "#ffd43b";
+const ORIGIN_COLOR = ROUTE_START_COLOR;
+const STOPOVER_COLOR = "#ff9f43";
+const DESTINATION_COLOR = ROUTE_END_COLOR;
+const ROUTE_COUNTRY_COLOR = "rgba(34, 118, 174, 0.58)";
+const ROUTE_COUNTRY_BORDER = "rgba(174, 238, 255, 0.98)";
+const ROUTE_ARC_COLORS: [string, string] = [ROUTE_START_COLOR, ROUTE_END_COLOR];
+const ARC_APEX_ALTITUDE = 0.12;
+const ARC_ENDPOINT_ALTITUDE = 0.025;
 const INITIAL_VIEW_ALTITUDE = 1.75;
 const RENDERER_CONFIG = { antialias: true, alpha: true, powerPreference: "high-performance" } as const;
 
@@ -143,7 +149,7 @@ function pointColor(point: object) {
 }
 
 function pointRadius(point: object) {
-  return (point as RoutePoint).kind === "stopover" ? 0.16 : 0.22;
+  return (point as RoutePoint).kind === "stopover" ? 0.85 : 1;
 }
 
 export default function RouteGlobe({ route, locale }: { route: RankedRouteOption; locale: Locale }) {
@@ -154,6 +160,7 @@ export default function RouteGlobe({ route, locale }: { route: RankedRouteOption
   const [globeSize, setGlobeSize] = useState(264);
   const [globeReady, setGlobeReady] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const routeCodes = useMemo(() => routeAirportCodes(route), [route]);
   const flightLegs = useMemo(() => routeFlightLegs(route), [route]);
   const airportData = airportMap ?? EMPTY_AIRPORTS;
@@ -191,6 +198,14 @@ export default function RouteGlobe({ route, locale }: { route: RankedRouteOption
     const from = airportData[leg.from];
     const to = airportData[leg.to];
     return from && to ? [{
+      altitude: equalApexArcAltitude(
+        from[0],
+        from[1],
+        to[0],
+        to[1],
+        ARC_APEX_ALTITUDE,
+        ARC_ENDPOINT_ALTITUDE,
+      ),
       from: leg.from,
       to: leg.to,
       startLat: from[0],
@@ -241,13 +256,20 @@ export default function RouteGlobe({ route, locale }: { route: RankedRouteOption
   }, []);
 
   useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const updateMotionPreference = () => setReduceMotion(media.matches);
+    updateMotionPreference();
+    media.addEventListener("change", updateMotionPreference);
+    return () => media.removeEventListener("change", updateMotionPreference);
+  }, []);
+
+  useEffect(() => {
     if (!globeReady) return;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     globeRef.current?.pointOfView(
       { lat: focus[0], lng: focus[1], altitude: INITIAL_VIEW_ALTITUDE },
       reduceMotion ? 0 : 650,
     );
-  }, [focus, globeReady, route.id]);
+  }, [focus, globeReady, reduceMotion, route.id]);
 
   function handleGlobeReady() {
     const globe = globeRef.current;
@@ -306,7 +328,7 @@ export default function RouteGlobe({ route, locale }: { route: RankedRouteOption
             animateIn={false}
             waitForGlobeReady
             polygonsData={countries}
-            polygonAltitude={(feature) => routeCountries.has((feature as CountryFeature).properties.country) ? 0.012 : 0.003}
+            polygonAltitude={(feature) => routeCountries.has((feature as CountryFeature).properties.country) ? 0.02 : 0.003}
             polygonCapColor={(feature) => routeCountries.has((feature as CountryFeature).properties.country) ? ROUTE_COUNTRY_COLOR : "rgba(8, 25, 40, 0.025)"}
             polygonSideColor={(feature) => routeCountries.has((feature as CountryFeature).properties.country) ? "rgba(41, 111, 151, 0.28)" : "rgba(0, 0, 0, 0)"}
             polygonStrokeColor={(feature) => routeCountries.has((feature as CountryFeature).properties.country) ? ROUTE_COUNTRY_BORDER : "rgba(230, 244, 252, 0.17)"}
@@ -316,7 +338,7 @@ export default function RouteGlobe({ route, locale }: { route: RankedRouteOption
             pointsData={routePoints}
             pointLat={(point) => (point as RoutePoint).lat}
             pointLng={(point) => (point as RoutePoint).lng}
-            pointAltitude={0.025}
+            pointAltitude={0.055}
             pointRadius={pointRadius}
             pointColor={pointColor}
             pointResolution={18}
@@ -327,11 +349,11 @@ export default function RouteGlobe({ route, locale }: { route: RankedRouteOption
             arcStartLng={(arc) => (arc as RouteArc).startLng}
             arcEndLat={(arc) => (arc as RouteArc).endLat}
             arcEndLng={(arc) => (arc as RouteArc).endLng}
-            arcStartAltitude={0.025}
-            arcEndAltitude={0.025}
-            arcAltitude={ARC_ALTITUDE}
-            arcColor={() => ["#70d6ff", "#f6c65c"]}
-            arcStroke={0.48}
+            arcStartAltitude={ARC_ENDPOINT_ALTITUDE}
+            arcEndAltitude={ARC_ENDPOINT_ALTITUDE}
+            arcAltitude={(arc) => (arc as RouteArc).altitude}
+            arcColor={() => ROUTE_ARC_COLORS}
+            arcStroke={1}
             arcLabel={(arc) => `${(arc as RouteArc).from} → ${(arc as RouteArc).to}`}
             arcsTransitionDuration={420}
             onGlobeReady={handleGlobeReady}

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import {
+  equalApexArcAltitude,
+  greatCircleAngle,
+} from "../app/route-globe-geometry.ts";
 
 const routeFinderSource = await readFile(new URL("../app/route-finder.tsx", import.meta.url), "utf8");
 const routeGlobeSource = await readFile(new URL("../app/route-globe.tsx", import.meta.url), "utf8");
@@ -94,8 +98,22 @@ test("selected routes update a draggable satellite globe below the weight panel"
   assert.match(routeGlobeSource, /polygonsData=\{countries\}/);
   assert.match(routeGlobeSource, /routeCountries\.has/);
   assert.match(routeGlobeSource, /function routeFlightLegs/);
-  assert.match(routeGlobeSource, /const ARC_ALTITUDE = 0\.18/);
-  assert.match(routeGlobeSource, /arcAltitude=\{ARC_ALTITUDE\}/);
+  assert.match(routeGlobeSource, /const ARC_APEX_ALTITUDE = 0\.12/);
+  assert.match(routeGlobeSource, /arcAltitude=\{\(arc\) => \(arc as RouteArc\)\.altitude\}/);
+  assert.match(routeGlobeSource, /pointsData=\{routePoints\}/);
+  assert.doesNotMatch(routeGlobeSource, /htmlElementsData|route-globe-order-marker/);
+  assert.match(routeGlobeSource, /const ROUTE_START_COLOR = "#ff4d4f"/);
+  assert.match(routeGlobeSource, /const ROUTE_END_COLOR = "#ffd43b"/);
+  assert.match(routeGlobeSource, /\[ROUTE_START_COLOR, ROUTE_END_COLOR\]/);
+  assert.match(globalCssSource, /\.route-globe-itinerary i \{[^}]*background: #ff4d4f/);
+  assert.match(globalCssSource, /\.route-globe-itinerary \.stopover i \{ background: #ff9f43/);
+  assert.match(globalCssSource, /\.route-globe-itinerary \.destination i \{ background: #ffd43b/);
+  assert.doesNotMatch(routeGlobeSource, /labelsData|RouteArrow|labelText/);
+  assert.doesNotMatch(routeGlobeSource, /arcDashLength|arcDashGap|arcDashAnimateTime/);
+  assert.match(routeGlobeSource, /arcStroke=\{1\}/);
+  assert.match(routeGlobeSource, /kind === "stopover" \? 0\.85 : 1/);
+  assert.match(routeGlobeSource, /pointAltitude=\{0\.055\}/);
+  assert.doesNotMatch(routeGlobeSource, /routePoint\.order|arc\.order/);
   assert.match(routeGlobeSource, /fetch\("\/map\/airport-map-data\.json"/);
   assert.match(routeGlobeSource, /fetch\("\/map\/route-countries\.geojson"/);
   assert.match(routeGlobeSource, /controls\.enableZoom = false/);
@@ -109,6 +127,57 @@ test("selected routes update a draggable satellite globe below the weight panel"
   assert.doesNotMatch(globalCssSource, /route-globe-viewport-dock|route-globe-space/);
   assert.match(globalCssSource, /@media \(max-width: 900px\)[\s\S]*\.route-globe-sticky \{ position: static/);
   assert.match(globalCssSource, /\.route-globe-dock-toggle/);
+});
+
+test("route arcs compensate for globe curvature to share one rendered apex", () => {
+  const endpointAltitude = 0.025;
+  const apexAltitude = 0.12;
+  const routes = [
+    [31.1434, 121.8052, 22.308, 113.9185],
+    [1.35019, 103.994, 37.618806, -122.375417],
+  ];
+  const controls = routes.map(([startLat, startLng, endLat, endLng]) => {
+    const angle = greatCircleAngle(startLat, startLng, endLat, endLng);
+    const altitude = equalApexArcAltitude(
+      startLat,
+      startLng,
+      endLat,
+      endLng,
+      apexAltitude,
+      endpointAltitude,
+    );
+    const controlRadius = 1 + 1.5 * altitude - 0.5 * endpointAltitude;
+    const renderedApex = 0.25 * (1 + endpointAltitude) * Math.cos(angle / 2)
+      + 0.75 * controlRadius * Math.cos(angle / 4)
+      - 1;
+    assert.ok(Math.abs(renderedApex - apexAltitude) < 1e-12);
+    return { altitude, angle };
+  });
+  assert.ok(
+    controls[1].altitude > controls[0].altitude,
+    "long routes need a higher control point to avoid sagging into the globe",
+  );
+
+  const longArc = controls[1];
+  const endpointRadius = 1 + endpointAltitude;
+  const controlRadius = 1 + 1.5 * longArc.altitude - 0.5 * endpointAltitude;
+  const points = [
+    [endpointRadius * Math.cos(longArc.angle / 2), -endpointRadius * Math.sin(longArc.angle / 2)],
+    [controlRadius * Math.cos(longArc.angle / 4), -controlRadius * Math.sin(longArc.angle / 4)],
+    [controlRadius * Math.cos(longArc.angle / 4), controlRadius * Math.sin(longArc.angle / 4)],
+    [endpointRadius * Math.cos(longArc.angle / 2), endpointRadius * Math.sin(longArc.angle / 2)],
+  ];
+  for (let step = 0; step <= 100; step += 1) {
+    const t = step / 100;
+    const u = 1 - t;
+    const rendered = points[0].map((_, axis) => (
+      u ** 3 * points[0][axis]
+      + 3 * u ** 2 * t * points[1][axis]
+      + 3 * u * t ** 2 * points[2][axis]
+      + t ** 3 * points[3][axis]
+    ));
+    assert.ok(Math.hypot(...rendered) >= 1, "SIN to SFO must stay outside the globe");
+  }
 });
 
 test("the route globe has coordinates and country codes for every localized airport", () => {
@@ -125,6 +194,9 @@ test("the route globe has coordinates and country codes for every localized airp
 test("the local country overlay contains strategy-map polygons", () => {
   assert.equal(routeCountries.type, "FeatureCollection");
   assert.ok(routeCountries.features.length >= 170);
+  assert.ok(routeCountries.features.some((feature) => feature.properties.country === "TW"));
+  assert.equal(airportMapData.TPE[2], "TW");
+  assert.equal(airportMapData.TSA[2], "TW");
   for (const feature of routeCountries.features) {
     assert.match(feature.properties.country, /^[A-Z]{2}$/);
     assert.ok(["Polygon", "MultiPolygon"].includes(feature.geometry.type));
