@@ -199,18 +199,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible
 .disclosure { color: #8d9096; font-size: 20px; transform: rotate(0); transition: transform 420ms var(--spring); }
 .route-card.open .disclosure { transform: rotate(180deg); }
 
-.flight-assessment { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; margin: -4px 22px 18px; padding: 12px 14px; color: var(--ink); background: rgba(237, 247, 252, 0.72); border: 1px solid rgba(90, 156, 192, 0.16); border-radius: 14px 17px 13px 18px; }
-.flight-assessment > div { min-width: 0; }
-.assessment-mark { width: 24px; height: 24px; display: grid; place-items: center; color: var(--blue); background: rgba(255, 255, 255, 0.86); border-radius: 8px 10px 8px 11px; font-size: 12px; }
-.flight-assessment strong { display: block; color: var(--blue-dark); font-size: 10px; letter-spacing: 0.04em; }
-.flight-assessment dl { display: grid; gap: 4px; margin: 7px 0 6px; }
-.flight-assessment dl > div { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 7px; align-items: baseline; }
-.flight-assessment dt { color: var(--muted); font-size: 9px; font-weight: 760; }
-.flight-assessment dd { margin: 0; font-size: 11px; line-height: 1.45; }
-.flight-assessment p { margin: 0; color: #456476; font-size: 10px; line-height: 1.45; }
-.flight-assessment.loading { align-items: center; }
-.flight-assessment.loading p { align-self: center; }
-
 .route-details { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 460ms var(--spring), opacity 280ms ease; }
 .route-card.open .route-details { grid-template-rows: 1fr; opacity: 1; }
 .details-inner { min-height: 0; overflow: hidden; }
@@ -682,7 +670,7 @@ footer p { max-width: 680px; margin: 0; text-align: right; }
   .route-meta span:nth-child(n+2) { display: none; }
   .price-block { min-width: auto; }
   .price-block strong { font-size: 20px; }
-  .flight-assessment, .warning-strip, .segments, .score-breakdown { margin-left: 18px; margin-right: 18px; }
+  .warning-strip, .segments, .score-breakdown { margin-left: 18px; margin-right: 18px; }
   .stopover-plans, .flight-tickets { margin-left: 18px; margin-right: 18px; }
   .live-variant-picker { grid-template-columns: 1fr; margin-left: 18px; margin-right: 18px; }
   .stopover-plan { align-items: stretch; flex-direction: column; gap: 11px; }
@@ -774,7 +762,7 @@ footer p { max-width: 680px; margin: 0; text-align: right; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .topbar, .flight-chat, .assistant-reopen, .route-card, .flight-assessment, .live-variant-picker, .variant-control, .chat-hub-option, .route-search-loader, .preference-dialog, .ai-workspace-header, .ai-chat-sheet, .ai-pace-control { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .topbar, .flight-chat, .assistant-reopen, .route-card, .live-variant-picker, .variant-control, .chat-hub-option, .route-search-loader, .preference-dialog, .ai-workspace-header, .ai-chat-sheet, .ai-pace-control { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
   .preference-overlay { background: rgba(30, 61, 90, 0.58); backdrop-filter: none; -webkit-backdrop-filter: none; }
   .planner.preference-open, .planner.ai-workspace-open { filter: none; transform: scale(0.994); }
 }

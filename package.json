@@ -11,7 +11,7 @@
     "start": "vinext start",
     "typecheck": "tsc --noEmit --incremental false",
     "check": "npm run typecheck && npm test",
-    "test": "npm run build && node --experimental-strip-types --test tests/routes.test.mjs tests/serpapi.test.mjs tests/departure-date-range.test.mjs tests/chat-layout.test.mjs tests/chat-api.test.mjs tests/flight-grouping.test.mjs tests/flight-search-budget.test.mjs tests/flight-cache.test.mjs tests/hub-characteristics.test.mjs tests/hub-option-availability.test.mjs tests/flight-assessment.test.mjs"
+    "test": "npm run build && node --experimental-strip-types --test tests/routes.test.mjs tests/serpapi.test.mjs tests/departure-date-range.test.mjs tests/chat-layout.test.mjs tests/chat-api.test.mjs tests/flight-grouping.test.mjs tests/flight-search-budget.test.mjs tests/flight-cache.test.mjs tests/hub-characteristics.test.mjs tests/hub-option-availability.test.mjs"
   },
   "dependencies": {
     "@number-flow/react": "^0.6.2",
