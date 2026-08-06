@@ -87,6 +87,53 @@ test("search switches through two backup SerpApi keys after 429 responses", asyn
   }
 });
 
+test("one regular request covers all supplied city airports", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.SERPAPI_API_KEY;
+  const originalCacheTtl = process.env.FLIGHT_SEARCH_CACHE_TTL_MS;
+  const calls = [];
+  process.env.SERPAPI_API_KEY = "metro-search-test-key";
+  process.env.FLIGHT_SEARCH_CACHE_TTL_MS = "0";
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return Response.json(serpPayload(String(url)));
+  };
+
+  try {
+    const response = await POST(new Request("http://local/api/flights/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        legs: [{
+          origins: ["LHR", "LGW", "STN", "LTN", "LCY"],
+          destinations: ["JFK", "EWR", "LGA"],
+        }],
+        dateRangeStart: "2027-02-11",
+        dateRangeEnd: "2027-02-11",
+        tripType: "one_way",
+        cabinClass: "economy",
+        maxStops: null,
+        adults: 1,
+        explorationHubs: [],
+      }),
+    }));
+    const data = await response.json();
+    const url = new URL(calls[0]);
+
+    assert.equal(response.status, 200);
+    assert.equal(calls.length, 1);
+    assert.equal(data.meta.providerRequests, 1);
+    assert.equal(url.searchParams.get("departure_id"), "LHR,LGW,STN,LTN,LCY");
+    assert.equal(url.searchParams.get("arrival_id"), "JFK,EWR,LGA");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.SERPAPI_API_KEY;
+    else process.env.SERPAPI_API_KEY = originalApiKey;
+    if (originalCacheTtl === undefined) delete process.env.FLIGHT_SEARCH_CACHE_TTL_MS;
+    else process.env.FLIGHT_SEARCH_CACHE_TTL_MS = originalCacheTtl;
+  }
+});
+
 test("initial search uses one regular request plus two per selected hub", async () => {
   const originalFetch = globalThis.fetch;
   const originalApiKey = process.env.SERPAPI_API_KEY;
