@@ -28,6 +28,60 @@ function serpPayload(urlString) {
   };
 }
 
+test("search switches to the backup SerpApi key after a 429 response", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalApiKey = process.env.SERPAPI_API_KEY;
+  const originalBackupApiKey = process.env.SERPAPI_BACKUP_API_KEY;
+  const originalCacheTtl = process.env.FLIGHT_SEARCH_CACHE_TTL_MS;
+  const calls = [];
+  process.env.SERPAPI_API_KEY = "primary-test-key";
+  process.env.SERPAPI_BACKUP_API_KEY = "backup-test-key";
+  process.env.FLIGHT_SEARCH_CACHE_TTL_MS = "0";
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    const key = new URL(String(url)).searchParams.get("api_key");
+    if (key === "primary-test-key") {
+      return Response.json(
+        { error: "Your account has run out of searches." },
+        { status: 429 },
+      );
+    }
+    return Response.json(serpPayload(String(url)));
+  };
+
+  try {
+    const response = await POST(new Request("http://local/api/flights/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        legs: [{ origins: ["SFO"], destinations: ["SIN"] }],
+        dateRangeStart: "2027-01-13",
+        dateRangeEnd: "2027-01-13",
+        tripType: "one_way",
+        cabinClass: "economy",
+        maxStops: 0,
+        adults: 1,
+      }),
+    }));
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(calls.length, 2);
+    assert.equal(data.meta.providerRequests, 2);
+    assert.equal(new URL(calls[0]).searchParams.get("api_key"), "primary-test-key");
+    assert.equal(new URL(calls[1]).searchParams.get("api_key"), "backup-test-key");
+    assert.equal(data.results.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.SERPAPI_API_KEY;
+    else process.env.SERPAPI_API_KEY = originalApiKey;
+    if (originalBackupApiKey === undefined) delete process.env.SERPAPI_BACKUP_API_KEY;
+    else process.env.SERPAPI_BACKUP_API_KEY = originalBackupApiKey;
+    if (originalCacheTtl === undefined) delete process.env.FLIGHT_SEARCH_CACHE_TTL_MS;
+    else process.env.FLIGHT_SEARCH_CACHE_TTL_MS = originalCacheTtl;
+  }
+});
+
 test("initial search uses one regular request plus two per selected hub", async () => {
   const originalFetch = globalThis.fetch;
   const originalApiKey = process.env.SERPAPI_API_KEY;

@@ -41,7 +41,11 @@ export async function POST(request: Request) {
     variantRequest,
   } = await request.json();
 
-  const apiKey = process.env.SERPAPI_API_KEY;
+  const apiKeys = Array.from(new Set([
+    process.env.SERPAPI_API_KEY,
+    process.env.SERPAPI_BACKUP_API_KEY,
+  ].filter((value): value is string => Boolean(value))));
+  let activeApiKeyIndex = 0;
   let remainingProviderRequests = MAX_PROVIDER_REQUESTS;
   let providerRequests = 0;
   const respond = (results: any[]) => Response.json({
@@ -51,14 +55,18 @@ export async function POST(request: Request) {
       requestLimit: MAX_PROVIDER_REQUESTS,
     },
   });
-  const reserveQueries = (queries: string[], requestedLimit = 1) => {
+  const selectQueries = (queries: string[], requestedLimit = 1) => {
     const limit = Math.max(
       0,
       Math.min(requestedLimit, remainingProviderRequests),
     );
-    const selected = queries.slice(0, limit);
-    remainingProviderRequests -= selected.length;
-    return selected;
+    return queries.slice(0, limit);
+  };
+  const reserveProviderRequest = () => {
+    if (remainingProviderRequests <= 0) return false;
+    remainingProviderRequests -= 1;
+    providerRequests += 1;
+    return true;
   };
 
   let legsToProcess = legs;
@@ -98,7 +106,7 @@ export async function POST(request: Request) {
       for (const dest of legDestinations) {
         for (const outDate of outDates) {
           for (const retDate of retDates) {
-            let url = `https://serpapi.com/search.json?engine=google_flights&departure_id=${origin}&arrival_id=${dest}&outbound_date=${outDate}&currency=USD&type=${useRoundTrip ? 1 : 2}&api_key=${apiKey}&adults=${adults || 1}`;
+            let url = `https://serpapi.com/search.json?engine=google_flights&departure_id=${origin}&arrival_id=${dest}&outbound_date=${outDate}&currency=USD&type=${useRoundTrip ? 1 : 2}&api_key=${apiKeys[activeApiKeyIndex]}&adults=${adults || 1}`;
             
             if (retDate) {
               url += `&return_date=${retDate}`;
@@ -118,12 +126,17 @@ export async function POST(request: Request) {
       }
     }
 
-    const plannedQueries = apiKey ? reserveQueries(queries, queryLimit) : [];
+    const plannedQueries = apiKeys.length ? selectQueries(queries, queryLimit) : [];
     const results = (
       await Promise.all(
         plannedQueries.map((query) =>
-          executeQuery(query, () => {
-            providerRequests += 1;
+          executeQuery(query, {
+            apiKeys,
+            reserveRequest: reserveProviderRequest,
+            getActiveKeyIndex: () => activeApiKeyIndex,
+            markKeyExhausted: (keyIndex) => {
+              activeApiKeyIndex = Math.max(activeApiKeyIndex, keyIndex + 1);
+            },
           })
         ),
       )
@@ -142,7 +155,7 @@ export async function POST(request: Request) {
 
     let finalResults = limitFlightResults(Array.from(unique.values()));
 
-    if (finalResults.length === 0 && allowMockFallback && !apiKey) {
+    if (finalResults.length === 0 && allowMockFallback && apiKeys.length === 0) {
       finalResults = generateMockFlights(legOrigins[0] || "NRT", legDestinations[0] || "LAX", startDate);
     }
     return finalResults;
@@ -655,7 +668,34 @@ function getSampledDates(startStr: string, endStr: string): string[] {
   return dates;
 }
 
-async function executeQuery(url: string, onProviderRequest?: () => void) {
+type SerpApiRequestContext = {
+  apiKeys: string[];
+  reserveRequest: () => boolean;
+  getActiveKeyIndex: () => number;
+  markKeyExhausted: (keyIndex: number) => void;
+};
+
+async function fetchSerpApiWithFallback(
+  url: string,
+  context: SerpApiRequestContext,
+): Promise<Response | null> {
+  for (
+    let keyIndex = context.getActiveKeyIndex();
+    keyIndex < context.apiKeys.length;
+    keyIndex += 1
+  ) {
+    if (!context.reserveRequest()) return null;
+
+    const requestUrl = new URL(url);
+    requestUrl.searchParams.set("api_key", context.apiKeys[keyIndex]);
+    const response = await fetch(requestUrl);
+    if (response.status !== 429) return response;
+    context.markKeyExhausted(keyIndex);
+  }
+  return null;
+}
+
+async function executeQuery(url: string, context: SerpApiRequestContext) {
   const cacheTtlMilliseconds = Math.max(
     0,
     Number(process.env.FLIGHT_SEARCH_CACHE_TTL_MS || 15 * 60_000),
@@ -675,15 +715,14 @@ async function executeQuery(url: string, onProviderRequest?: () => void) {
   }
 
   try {
-    onProviderRequest?.();
-    const response = await fetch(url);
-    if (!response.ok) return [];
-    
+    const response = await fetchSerpApiWithFallback(url, context);
+    if (!response?.ok) return [];
+
     const data = await response.json();
     if (!data.best_flights && !data.other_flights) return [];
 
     const rawFlights = [...(data.best_flights || []), ...(data.other_flights || [])];
-    
+
     const parsed = rawFlights.map(f => {
       const flightNum = f.flights.map((fl: any) => fl.flight_number);
       const stops = f.flights.length - 1;
