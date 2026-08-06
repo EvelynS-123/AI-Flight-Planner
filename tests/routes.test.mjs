@@ -37,6 +37,7 @@ import {
 import { checkTravelRevision } from "../app/ai-travel/security.ts";
 import { ROUTES, moveWeightBoundary, scoreRoutes } from "../app/route-data.ts";
 import { applyPreferenceEvaluations } from "../app/preference-evaluation.ts";
+import { journeyAirportGroups } from "../app/flights/search-context.ts";
 import {
   DEFAULT_CITY_ATTRACTIVENESS,
   FAVORITE_CITY_LIMIT,
@@ -924,6 +925,41 @@ test("less common airports show a city or live provider name instead of only a c
   assert.equal(
     airportCity("XYZ", "en", "Example Regional Airport"),
     "Example Regional Airport",
+  );
+});
+
+test("route headings preserve every searched airport on both sides", () => {
+  assert.deepEqual(
+    journeyAirportGroups({
+      legs: [{
+        origins: ["NRT", "HND", "NRT"],
+        destinations: ["LAX"],
+      }],
+    }, "NRT", "LAX"),
+    {
+      origins: ["NRT", "HND"],
+      destinations: ["LAX"],
+    },
+  );
+
+  assert.deepEqual(
+    journeyAirportGroups({
+      legs: [
+        { origins: ["LHR", "LGW", "STN", "LTN", "LCY"], destinations: ["DUB"] },
+        { origins: ["DUB"], destinations: ["JFK", "EWR", "LGA"] },
+      ],
+    }, "LHR", "JFK"),
+    {
+      origins: ["LHR", "LGW", "STN", "LTN", "LCY"],
+      destinations: ["JFK", "EWR", "LGA"],
+    },
+  );
+});
+
+test("route headings fall back to the displayed flight for legacy searches", () => {
+  assert.deepEqual(
+    journeyAirportGroups(null, "PVG", "LAX"),
+    { origins: ["PVG"], destinations: ["LAX"] },
   );
 });
 
