@@ -23,6 +23,7 @@ import {
   maxUsableStopoverMinutesForFlight,
   type FlightResultGroup,
 } from "./flights/group-results";
+import { journeyAirportGroups } from "./flights/search-context";
 import {
   applyPreferenceEvaluations,
   preferenceCandidateForRoute,
@@ -190,17 +191,19 @@ function LanguageGate({
 
 function AirportLabel({
   code,
+  cityCode = code,
   locale,
   providerName,
 }: {
   code: string;
+  cityCode?: string;
   locale: Locale;
   providerName?: string;
 }) {
   return (
     <span className="airport-label">
       <strong>{code}</strong>
-      <span>{airportCity(code, locale, providerName)}</span>
+      <span>{airportCity(cityCode, locale, providerName)}</span>
     </span>
   );
 }
@@ -289,6 +292,10 @@ export default function RouteFinder() {
   const [liveFlightGroups, setLiveFlightGroups] = useState<FlightResultGroup[] | null>(null);
   const [selectedLiveFlightIds, setSelectedLiveFlightIds] = useState<Record<string, string>>({});
   const [liveSearchContext, setLiveSearchContext] = useState<LiveSearchContext | null>(null);
+  const headingAirportGroups = useMemo(
+    () => journeyAirportGroups(liveSearchContext, origin, destination),
+    [liveSearchContext, origin, destination],
+  );
   const [selectedVariantDates, setSelectedVariantDates] = useState<Record<string, string>>({});
   const [variantLoading, setVariantLoading] = useState<Record<string, boolean>>({});
   const [variantErrors, setVariantErrors] = useState<Record<string, boolean>>({});
@@ -976,9 +983,19 @@ export default function RouteFinder() {
               <div>
                 <p className="eyebrow">{copy.routeIdeas}</p>
                 <h2>
-                  <AirportLabel code={origin} locale={locale} providerName={liveAirportNames[origin]} />
+                  <AirportLabel
+                    code={headingAirportGroups.origins.join("/")}
+                    cityCode={headingAirportGroups.origins[0]}
+                    locale={locale}
+                    providerName={liveAirportNames[headingAirportGroups.origins[0]]}
+                  />
                   {" "}<Arrow />{" "}
-                  <AirportLabel code={destination} locale={locale} providerName={liveAirportNames[destination]} />
+                  <AirportLabel
+                    code={headingAirportGroups.destinations.join("/")}
+                    cityCode={headingAirportGroups.destinations[0]}
+                    locale={locale}
+                    providerName={liveAirportNames[headingAirportGroups.destinations[0]]}
+                  />
                 </h2>
                 <p>{results.length ? resultSummary : copy.noRoute}</p>
               </div>
