@@ -28,19 +28,21 @@ function serpPayload(urlString) {
   };
 }
 
-test("search switches to the backup SerpApi key after a 429 response", async () => {
+test("search switches through two backup SerpApi keys after 429 responses", async () => {
   const originalFetch = globalThis.fetch;
   const originalApiKey = process.env.SERPAPI_API_KEY;
   const originalBackupApiKey = process.env.SERPAPI_BACKUP_API_KEY;
+  const originalSecondBackupApiKey = process.env.SERPAPI_BACKUP_API_KEY_2;
   const originalCacheTtl = process.env.FLIGHT_SEARCH_CACHE_TTL_MS;
   const calls = [];
   process.env.SERPAPI_API_KEY = "primary-test-key";
-  process.env.SERPAPI_BACKUP_API_KEY = "backup-test-key";
+  process.env.SERPAPI_BACKUP_API_KEY = "first-backup-test-key";
+  process.env.SERPAPI_BACKUP_API_KEY_2 = "second-backup-test-key";
   process.env.FLIGHT_SEARCH_CACHE_TTL_MS = "0";
   globalThis.fetch = async (url) => {
     calls.push(String(url));
     const key = new URL(String(url)).searchParams.get("api_key");
-    if (key === "primary-test-key") {
+    if (key !== "second-backup-test-key") {
       return Response.json(
         { error: "Your account has run out of searches." },
         { status: 429 },
@@ -66,10 +68,11 @@ test("search switches to the backup SerpApi key after a 429 response", async () 
     const data = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(calls.length, 2);
-    assert.equal(data.meta.providerRequests, 2);
+    assert.equal(calls.length, 3);
+    assert.equal(data.meta.providerRequests, 3);
     assert.equal(new URL(calls[0]).searchParams.get("api_key"), "primary-test-key");
-    assert.equal(new URL(calls[1]).searchParams.get("api_key"), "backup-test-key");
+    assert.equal(new URL(calls[1]).searchParams.get("api_key"), "first-backup-test-key");
+    assert.equal(new URL(calls[2]).searchParams.get("api_key"), "second-backup-test-key");
     assert.equal(data.results.length, 1);
   } finally {
     globalThis.fetch = originalFetch;
@@ -77,6 +80,8 @@ test("search switches to the backup SerpApi key after a 429 response", async () 
     else process.env.SERPAPI_API_KEY = originalApiKey;
     if (originalBackupApiKey === undefined) delete process.env.SERPAPI_BACKUP_API_KEY;
     else process.env.SERPAPI_BACKUP_API_KEY = originalBackupApiKey;
+    if (originalSecondBackupApiKey === undefined) delete process.env.SERPAPI_BACKUP_API_KEY_2;
+    else process.env.SERPAPI_BACKUP_API_KEY_2 = originalSecondBackupApiKey;
     if (originalCacheTtl === undefined) delete process.env.FLIGHT_SEARCH_CACHE_TTL_MS;
     else process.env.FLIGHT_SEARCH_CACHE_TTL_MS = originalCacheTtl;
   }

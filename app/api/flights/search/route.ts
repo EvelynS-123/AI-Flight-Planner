@@ -44,6 +44,7 @@ export async function POST(request: Request) {
   const apiKeys = Array.from(new Set([
     process.env.SERPAPI_API_KEY,
     process.env.SERPAPI_BACKUP_API_KEY,
+    process.env.SERPAPI_BACKUP_API_KEY_2,
   ].filter((value): value is string => Boolean(value))));
   let activeApiKeyIndex = 0;
   let remainingProviderRequests = MAX_PROVIDER_REQUESTS;
