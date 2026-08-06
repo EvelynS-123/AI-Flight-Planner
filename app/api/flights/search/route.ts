@@ -100,11 +100,14 @@ export async function POST(request: Request) {
     const retDates = useRoundTrip
       ? limitDates(getSampledDates(effectiveReturnStart, effectiveReturnEnd), 1)
       : [undefined];
+    const originGroup = normalizeAirportGroup(legOrigins);
+    const destinationGroup = normalizeAirportGroup(legDestinations);
+    if (!originGroup || !destinationGroup) return [];
 
     const queries: string[] = [];
     
-    for (const origin of legOrigins) {
-      for (const dest of legDestinations) {
+    for (const origin of [originGroup]) {
+      for (const dest of [destinationGroup]) {
         for (const outDate of outDates) {
           for (const retDate of retDates) {
             let url = `https://serpapi.com/search.json?engine=google_flights&departure_id=${origin}&arrival_id=${dest}&outbound_date=${outDate}&currency=USD&type=${useRoundTrip ? 1 : 2}&api_key=${apiKeys[activeApiKeyIndex]}&adults=${adults || 1}`;
@@ -450,6 +453,19 @@ function addIsoDays(dateString: string, days: number): string {
   if (Number.isNaN(date.getTime())) return dateString;
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function normalizeAirportGroup(values: unknown): string {
+  if (!Array.isArray(values)) return "";
+  return Array.from(
+    new Set(
+      values.flatMap((value) => (
+        typeof value === "string"
+          ? value.split(",").map((code) => code.trim().toUpperCase())
+          : []
+      )).filter((code) => /^[A-Z]{3}$/.test(code)),
+    ),
+  ).join(",");
 }
 
 function limitDates(dates: string[], limit?: number): string[] {

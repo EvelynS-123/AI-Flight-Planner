@@ -237,6 +237,14 @@ test("route exploration stays generalized, diverse, and preference-grounded", ()
   assert.match(flightSearchApiSource, /combineTwoLegResults/);
 });
 
+test("named cities expand to their practical commercial airports", () => {
+  assert.match(chatApiSource, /New York → JFK, EWR, LGA/);
+  assert.match(chatApiSource, /London → LHR, LGW, STN, LTN, LCY/);
+  assert.match(chatApiSource, /When the user explicitly names an airport or IATA code, keep only that airport/);
+  assert.match(flightSearchApiSource, /normalizeAirportGroup\(legOrigins\)/);
+  assert.match(flightSearchApiSource, /normalizeAirportGroup\(legDestinations\)/);
+});
+
 test("users explicitly limit stopover exploration before search", () => {
   assert.match(flightChatSource, /selectedHubs\.length >= 3/);
   assert.match(flightChatSource, /explorationHubs: selectedHubs/);

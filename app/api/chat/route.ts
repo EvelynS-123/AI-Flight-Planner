@@ -48,6 +48,10 @@ export async function POST(request: Request) {
       else if (lastMsg.includes("ソウル") || lastMsg.includes("seoul") || lastMsg.includes("icn")) mockOrigins = ["ICN"];
       else if (lastMsg.includes("大阪") || lastMsg.includes("関西") || lastMsg.includes("kix")) mockOrigins = ["KIX"];
       else if (lastMsg.includes("東京") || lastMsg.includes("成田") || lastMsg.includes("nrt")) mockOrigins = ["NRT"];
+      else if (lastMsg.includes("lhr")) mockOrigins = ["LHR"];
+      else if (lastMsg.includes("london")) mockOrigins = ["LHR", "LGW", "STN", "LTN", "LCY"];
+      else if (lastMsg.includes("jfk")) mockOrigins = ["JFK"];
+      else if (lastMsg.includes("new york")) mockOrigins = ["JFK", "EWR", "LGA"];
 
       // Destinations — specific cities
       if (lastMsg.includes("サンフランシスコ") || lastMsg.includes("sfo")) mockDestinations = ["SFO"];
@@ -55,9 +59,11 @@ export async function POST(request: Request) {
       else if (lastMsg.includes("バンクーバー") || lastMsg.includes("yvr")) mockDestinations = ["YVR"];
       else if (lastMsg.includes("ロサンゼルス") || lastMsg.includes("lax")) mockDestinations = ["LAX"];
       else if (!mockVia && (lastMsg.includes("ホノルル") || lastMsg.includes("ハワイ") || lastMsg.includes("hawaii") || lastMsg.includes("hnl"))) mockDestinations = ["HNL"];
-      else if (lastMsg.includes("ロンドン") || lastMsg.includes("london") || lastMsg.includes("lhr")) mockDestinations = ["LHR"];
+      else if (lastMsg.includes("lhr")) mockDestinations = ["LHR"];
+      else if (lastMsg.includes("ロンドン") || lastMsg.includes("london")) mockDestinations = ["LHR", "LGW", "STN", "LTN", "LCY"];
       else if (lastMsg.includes("パリ") || lastMsg.includes("paris") || lastMsg.includes("cdg")) mockDestinations = ["CDG"];
-      else if (lastMsg.includes("ニューヨーク") || lastMsg.includes("new york") || lastMsg.includes("jfk")) mockDestinations = ["JFK"];
+      else if (lastMsg.includes("jfk")) mockDestinations = ["JFK"];
+      else if (lastMsg.includes("ニューヨーク") || lastMsg.includes("new york")) mockDestinations = ["JFK", "EWR", "LGA"];
       else if (lastMsg.includes("ドバイ") || lastMsg.includes("dubai") || lastMsg.includes("dxb")) mockDestinations = ["DXB"];
       else if (lastMsg.includes("シドニー") || lastMsg.includes("sydney") || lastMsg.includes("syd")) mockDestinations = ["SYD"];
       else if (lastMsg.includes("シンガポール") || lastMsg.includes("singapore") || lastMsg.includes("sin")) mockDestinations = ["SIN"];
@@ -182,14 +188,15 @@ Example for "Tokyo to LA via Hawaii":
 
 === CITY → IATA MAPPING ===
 Map city names to their major airport IATA codes. For any city NOT listed below, use your general knowledge to infer its primary international IATA code (e.g. Paris → CDG, Rome → FCO, Hawaii → HNL).
+- When the user names a city, include all practical commercial airports serving that city. When the user explicitly names an airport or IATA code, keep only that airport.
 - Correct obvious city-name misspellings when the conversation context makes one intended city clear, then continue without asking for confirmation. Ask one concise clarification only when multiple materially different cities remain plausible.
 - 東京/Tokyo → NRT, HND  |  大阪/Osaka → KIX  |  上海/Shanghai → PVG
 - 北京/Beijing → PEK  |  香港/Hong Kong → HKG  |  台北/Taipei → TPE
 - ソウル/Seoul → ICN  |  シンガポール/Singapore → SIN  |  バンコク/Bangkok → BKK
 - ロサンゼルス/Los Angeles → LAX  |  サンフランシスコ/San Francisco → SFO
-- ニューヨーク/New York → JFK  |  シカゴ/Chicago → ORD  |  シアトル/Seattle → SEA
+- ニューヨーク/New York → JFK, EWR, LGA  |  シカゴ/Chicago → ORD  |  シアトル/Seattle → SEA
 - バンクーバー/Vancouver → YVR  |  ホノルル/Honolulu → HNL
-- ロンドン/London → LHR  |  パリ/Paris → CDG  |  フランクフルト/Frankfurt → FRA
+- ロンドン/London → LHR, LGW, STN, LTN, LCY  |  パリ/Paris → CDG  |  フランクフルト/Frankfurt → FRA
 - アムステルダム/Amsterdam → AMS  |  ドバイ/Dubai → DXB  |  ドーハ/Doha → DOH
 - シドニー/Sydney → SYD  |  メルボルン/Melbourne → MEL
 
